@@ -16,6 +16,16 @@ endfunction
 // Exercise 2
 // Multiplication by repeated addition
 function Bit#(TAdd#(n,n)) multiply_by_adding( Bit#(n) a, Bit#(n) b );
+    Bit#(n) temp = 0;
+    Bit#(n) prod = 0;
+    for(Integer i = 0; i < valueOf(n); i = i + 1) begin
+        Bit#(TAdd#(n,1)) a_ex = (b[i]==0) ? 0 : zeroExtend(a);
+        Bit#(TAdd#(n,1)) temp_ex = zeroExtend(temp);
+        Bit#(TAdd#(n,1)) sum = temp_ex + a_ex;
+        prod[i] = sum[0];
+        temp = sum[valueOf(n):1]; 
+    end
+    return {temp,prod};
 endfunction
 
 // Multiplier Interface
@@ -29,7 +39,7 @@ endinterface
 
 // Exercise 4
 // Folded multiplier by repeated addition
-module mkFoldedMultiplier( Multiplier#(n) )
+module mkFoldedMultiplier( Multiplier#(n) );
 endmodule
 
 
@@ -48,12 +58,12 @@ endfunction
 
 // Exercise 6
 // Booth Multiplier
-module mkBoothMultiplier( Multiplier#(n) )
+module mkBoothMultiplier( Multiplier#(n) );
 endmodule
 
 
 
 // Exercise 8
 // Radix-4 Booth Multiplier
-module mkBoothMultiplierRadix4( Multiplier#(n) )
+module mkBoothMultiplierRadix4( Multiplier#(n) );
 endmodule

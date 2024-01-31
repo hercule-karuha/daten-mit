@@ -1,0 +1,63 @@
+1.Hardware-wise, unsigned addition is the same as signed addition when using two's complement encoding. 
+Using evidence from the test bench, is unsigned multiplication the same as signed multiplication?
+
+OUTPUT:
+root@6b39a4a9700d:/daten-mit/6.175/lab-3# ./simSignedVsUnsigned
+PASSED case 1
+    if signed: 105 * 115 test function gave 12075
+    if unsigned: 105 * 115 test function gave 12075
+FAILED:
+    if signed: 81 * -1 test function gave -81 instead of 20655
+    if unsigned: 81 * 255 test function gave 65455 instead of 20655
+
+is not same.
+
+
+
+
+
+2.In mkTBDumb excluding the line
+
+function Bit#(16) test_function( Bit#(8) a, Bit#(8) b ) = multiply_unsigned( a, b );
+
+and modifying the rest of the module to have
+
+(* synthesize *)
+module mkTbDumb();
+    Empty tb <- mkTbMulFunction(multiply_unsigned, multiply_unsigned, True);
+    return tb;
+endmodule
+
+will result in a compilation error. What is that error? 
+How does the original code fix the compilation error? 
+You could also fix the error by having two function definitions as shown below.
+
+(* synthesize *)
+module mkTbDumb();
+    function Bit#(16) test_function( Bit#(8) a, Bit#(8) b ) = multiply_unsigned( a, b );
+    function Bit#(16) ref_function( Bit#(8) a, Bit#(8) b ) = multiply_unsigned( a, b );
+    Empty tb <- mkTbMulFunction(test_function, ref_function, True);
+    return tb;
+endmodule
+
+Why is two function definitions not necessary? 
+(i.e. why can the second operand to mkTbMulFunction have variables in its type?) 
+Hint: Look at the types of the operands of mkTbMulFunction in TestBenchTemplates.bsv.
+
+the error is:
+Error: "TestBench.bsv", line 8, column 17: (T0035)
+  Bit vector of unknown size introduced near this location.
+  Please remove unnecessary extensions, truncations and concatenations and/or
+  provide more type information to resolve this ambiguity.
+make: *** [Makefile:5: compile] Error 1
+
+thr definitions of mkTbMulFunction:
+module mkTbMulFunction(
+    function Bit#(TAdd#(n,n)) test_function( Bit#(n) a, Bit#(n) b ),
+    function Bit#(TAdd#(n,n)) ref_function( Bit#(n) a, Bit#(n) b ),
+    Bool verbose,
+    Empty ifc
+) provisos( Add#(a__, n, TMul#(TDiv#(n, 32), 32)), Add#(1, b__, n) );
+
+the compiler can't infer "n" without function Bit#(16) test_function( Bit#(8) a, Bit#(8) b ) = multiply_unsigned( a, b );
+and as the n is same in two operands the compiler can infer n from the first operand.

@@ -1,16 +1,20 @@
-testbenches=Dumb.tb FoldedMultiplier.tb SignedVsUnsigned.tb Ex3.tb Ex5.tb Ex7a.tb Ex7b.tb Ex9a.tb Ex9b.tb
-
 compile:
 	mkdir -p buildDir
-	bsc -u -sim -bdir buildDir -info-dir buildDir -simdir buildDir -vdir buildDir -aggressive-conditions -keep-fires TestBench.bsv
+	bsc -u -sim -bdir buildDir -info-dir buildDir -simdir buildDir -vdir buildDir -aggressive-conditions TestBench.bsv
 
-%.tb: compile
-	bsc -sim -e mkTb$(patsubst %.tb,%,$@) -bdir buildDir -info-dir buildDir -simdir buildDir -aggressive-conditions -keep-fires -o sim$(patsubst %.tb,%,$@) buildDir/*.ba
+fifo: compile
+	bsc -sim -e mkTestBenchFifo -bdir buildDir -info-dir buildDir -simdir buildDir -o simFifo
 
-all: $(testbenches)
+inelastic: compile
+	bsc -sim -e mkTbFftInelasticPipeline -bdir buildDir -info-dir buildDir -simdir buildDir -o simInelastic
+
+elastic: compile
+	bsc -sim -e mkTbFftElasticPipeline -bdir buildDir -info-dir buildDir -simdir buildDir -o simElastic
+
+all: fifo inelastic elastic
 
 clean:
 	rm -rf buildDir sim*
 
-.PHONY: clean all add compile %.tb
+.PHONY: clean all inelastic elastic fifo compile
 .DEFAULT_GOAL := all
