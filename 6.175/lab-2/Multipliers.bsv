@@ -40,6 +40,43 @@ endinterface
 // Exercise 4
 // Folded multiplier by repeated addition
 module mkFoldedMultiplier( Multiplier#(n) );
+    Reg#(Bit#(n)) a <- mkRegU();
+    Reg#(Bit#(n)) b <- mkRegU();
+    Reg#(Bit#(n)) prod <-mkRegU();
+    Reg#(Bit#(n)) tp <- mkReg(0);
+    Reg#(Bit#(n)) i <- mkReg( fromInteger(valueOf(n)+1) );
+
+    rule mulStep( i < fromInteger(valueOf(n)) );
+        Bit#(TAdd#(n,1)) m = ( (a[0]==0)? 0 : b );
+        a <= a >> 1;
+        Bit#(TAdd#(n,1)) tp_ex = zeroExtend(tp);
+        Bit#(TAdd#(n,1)) sum = m + tp;
+        prod <= { sum[0], prod [valueOf(n):1] };
+        tp <= truncateLSB(sum);
+        i <= i + 1;
+    endrule
+
+    method Bool start_ready();
+        return i == fromInteger(valueOf(TAdd#(n,1)));
+    endmethod
+    
+    method Action start(Bit#(n) aIn, Bit#(n) bIn) if (i == fromInteger(valueOf(TAdd#(n,1))));
+        a <= aIn;
+        b <= bIn;
+        i <= fromInteger(0);
+        tp <= fromInteger(0);
+        prod <= fromInteger(0);
+    endmethod
+
+    method Bool result_ready();
+        return i==fromInteger(valueOf(n));
+    endmethod
+
+    method ActionValue#(Bit#(TAdd#(n,n))) result() if (i == fromInteger(valueOf(n)));
+        i <= i + 1;
+        return {tp,prod};
+    endmethod
+
 endmodule
 
 
