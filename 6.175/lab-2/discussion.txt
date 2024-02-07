@@ -44,6 +44,8 @@ Why is two function definitions not necessary?
 (i.e. why can the second operand to mkTbMulFunction have variables in its type?) 
 Hint: Look at the types of the operands of mkTbMulFunction in TestBenchTemplates.bsv.
 
+
+
 the error is:
 Error: "TestBench.bsv", line 8, column 17: (T0035)
   Bit vector of unknown size introduced near this location.
@@ -61,3 +63,15 @@ module mkTbMulFunction(
 
 the compiler can't infer "n" without function Bit#(16) test_function( Bit#(8) a, Bit#(8) b ) = multiply_unsigned( a, b );
 and as the n is same in two operands the compiler can infer n from the first operand.
+
+
+
+
+
+3. Is your implementation of multiply_by_adding a signed multiplier or an unsigned multiplier? 
+(Note: if it does not match either multiply_signed or multiply_unsigned, it is wrong).
+
+
+Is an unsigned multiplier.
+
+
