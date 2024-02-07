@@ -47,12 +47,11 @@ module mkFoldedMultiplier( Multiplier#(n) );
     Reg#(Bit#(n)) i <- mkReg( fromInteger(valueOf(n)+1) );
 
     rule mulStep( i < fromInteger(valueOf(n)) );
-        Bit#(TAdd#(n,1)) m = ( (a[0]==0)? 0 : b );
-        a <= a >> 1;
+        Bit#(TAdd#(n,1)) m = ( (b[i]==0)? 0 : zeroExtend(a) );
         Bit#(TAdd#(n,1)) tp_ex = zeroExtend(tp);
-        Bit#(TAdd#(n,1)) sum = m + tp;
-        prod <= { sum[0], prod [valueOf(n):1] };
-        tp <= truncateLSB(sum);
+        Bit#(TAdd#(n,1)) sum = m + tp_ex;
+        prod[i] <= sum[0];
+		tp <= sum[valueOf(n) : 1];
         i <= i + 1;
     endrule
 
