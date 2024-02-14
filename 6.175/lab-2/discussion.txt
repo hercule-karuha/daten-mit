@@ -45,7 +45,6 @@ Why is two function definitions not necessary?
 Hint: Look at the types of the operands of mkTbMulFunction in TestBenchTemplates.bsv.
 
 
-
 the error is:
 Error: "TestBench.bsv", line 8, column 17: (T0035)
   Bit vector of unknown size introduced near this location.
@@ -71,7 +70,28 @@ and as the n is same in two operands the compiler can infer n from the first ope
 3. Is your implementation of multiply_by_adding a signed multiplier or an unsigned multiplier? 
 (Note: if it does not match either multiply_signed or multiply_unsigned, it is wrong).
 
-
 Is an unsigned multiplier.
 
 
+
+
+
+4.Fill in above table in discussion.txt. 
+None of the Radix-4 Booth encodings should have more than one non-zero symbol in them.
+
+Current Bits	Previous Bit	Original Booth Encoding	    Radix-4 Booth Encoding
+00	                0		               00                         00
+00	                1		               0+                         0+
+01	                0	                   +-	                      0+
+01                  1		               +0                         +0
+10                  0		               -0                         -0
+10                  1		               -+                         0-
+11                  0		               0-                         0-  
+11                  1		               00                         00 
+
+
+
+5.Now consider extending your Booth multiplier even further to a radix-8 Booth multiplier. 
+This would be like doing 3 steps of the radix-2 Booth multiplier in a single step. 
+Can all radix-8 Booth encodings be represented with only one non-zero symbol like the radix-4 Booth multiplier? 
+Do you think it would still make sense to make a radix-8 Booth multiplier?

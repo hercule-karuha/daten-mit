@@ -43,7 +43,7 @@ endmodule
 // Exercise 7
 (* synthesize *)
 module mkTbEx7a();
-    Multiplier#(32) dut <- mkFoldedMultiplier();
+    Multiplier#(32) dut <- mkBoothMultiplier();
     Empty tb <- mkTbMulModule(dut, multiply_signed, True);
     return tb;    
 endmodule
@@ -51,7 +51,7 @@ endmodule
 // Exercise 7
 (* synthesize *)
 module mkTbEx7b();
-    Multiplier#(64) dut <- mkFoldedMultiplier();
+    Multiplier#(64) dut <- mkBoothMultiplier();
     Empty tb <- mkTbMulModule(dut, multiply_signed, True);
     return tb;  
 endmodule
@@ -59,10 +59,16 @@ endmodule
 // Exercise 9
 (* synthesize *)
 module mkTbEx9a();
+    Multiplier#(32) dut <- mkBoothMultiplierRadix4();
+    Empty tb <- mkTbMulModule(dut, multiply_signed, True);
+    return tb;    
 endmodule
 
 // Exercise 9
 (* synthesize *)
 module mkTbEx9b();
+    Multiplier#(64) dut <- mkBoothMultiplierRadix4();
+    Empty tb <- mkTbMulModule(dut, multiply_signed, True);
+    return tb;    
 endmodule
 

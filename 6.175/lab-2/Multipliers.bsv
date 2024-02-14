@@ -116,10 +116,11 @@ module mkBoothMultiplier( Multiplier#(n) );
         m_pos <= {m, 0};
         m_neg <= {~m, 0};
         p <= {0, r, 1'b0};
+        i <= 0;
     endmethod
 
     method Bool result_ready();
-        return i==fromInteger(valueOf(n));
+        return i == fromInteger(valueOf(n));
     endmethod
 
     method ActionValue#(Bit#(TAdd#(n,n))) result() if (i == fromInteger(valueOf(n)));
@@ -133,4 +134,39 @@ endmodule
 // Exercise 8
 // Radix-4 Booth Multiplier
 module mkBoothMultiplierRadix4( Multiplier#(n) );
+    Reg#(Bit#(TAdd#(TAdd#(n,n), 1))) m_pos <-mkRegU();
+    Reg#(Bit#(TAdd#(TAdd#(n,n), 1))) m_neg <- mkRegU();
+    Reg#(Bit#(TAdd#(TAdd#(n,n), 1))) p <- mkRegU();
+    Reg#(Bit#(n)) i <- mkReg( fromInteger(valueOf(n)+1) );
+
+    rule mulStep( i < fromInteger(valueOf(n)) );
+        let pr = p[2:0];
+        if ( pr == 3'b001 ) p <= p + m_pos;
+        if ( pr == 3'b010 ) p <= p + m_pos;
+        if ( pr == 3'b011 ) p <= p + (m_pos << 1);
+        if ( pr == 3'b100 ) p <= p + (m_neg << 1);
+        if ( pr == 3'b101 ) p <= p + m_neg;
+        if ( pr == 3'b110 ) p <= p + m_neg;
+        p <= arth_shift(p, 2, True);
+        i <= i + 2;
+    endrule
+    
+    method Bool start_ready();
+        return i == fromInteger(valueOf(TAdd#(n,1)));
+    endmethod
+
+    method Action start(Bit#(n) m, Bit#(n) r) if (i == fromInteger(valueOf(TAdd#(n,1))));
+       m_pos <= {msb(m), m, 0};
+       m_neg <= {msb(~m), (~m), 0};
+       p <= {0, r, 1'b0};
+       i <= 0;
+    endmethod
+
+    method Bool result_ready();
+        return i == fromInteger(valueOf(n));
+    endmethod
+
+    method ActionValue#(Bit#(TAdd#(n,n))) result() if (i == fromInteger(valueOf(n)));
+        return p[valueOf(TSub#(TAdd#(n,n), 1)):1];
+    endmethod
 endmodule
