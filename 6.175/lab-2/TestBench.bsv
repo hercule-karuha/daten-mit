@@ -43,6 +43,9 @@ endmodule
 // Exercise 7
 (* synthesize *)
 module mkTbEx7a();
+    Multiplier#(32) dut <- mkFoldedMultiplier();
+    Empty tb <- mkTbMulModule(dut, multiply_signed, True);
+    return tb;    
 endmodule
 
 // Exercise 7

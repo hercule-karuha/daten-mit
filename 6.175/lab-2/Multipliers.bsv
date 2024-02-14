@@ -91,10 +91,41 @@ function Bit#(n) arth_shift(Bit#(n) a, Integer n, Bool right_shift);
 endfunction
 
 
-
 // Exercise 6
 // Booth Multiplier
 module mkBoothMultiplier( Multiplier#(n) );
+    Reg#(Bit#(TAdd#(TAdd#(n,n), 1))) m_pos <-mkRegU();
+    Reg#(Bit#(TAdd#(TAdd#(n,n), 1))) m_neg <- mkRegU();
+    Reg#(Bit#(TAdd#(TAdd#(n,n), 1))) p <- mkRegU();
+    Reg#(Bit#(n)) i <- mkReg( fromInteger(valueOf(n)+1) );
+
+
+    rule mulStep( i < fromInteger(valueOf(n)) );
+        let pr = p[1:0];
+        if ( pr == 2'b01 ) p <= p + m_pos;
+        if ( pr == 2'b10 ) p <= p + m_neg;
+        p <= arth_shift(p, 1, True);
+        i <= i + 1;
+    endrule
+    
+    method Bool start_ready();
+        return i == fromInteger(valueOf(TAdd#(n,1)));
+    endmethod
+
+    method Action start(Bit#(n) m, Bit#(n) r) if (i == fromInteger(valueOf(TAdd#(n,1))));
+        m_pos <= {m, 0};
+        m_neg <= {~m, 0};
+        p <= {0, r, 1'b0};
+    endmethod
+
+    method Bool result_ready();
+        return i==fromInteger(valueOf(n));
+    endmethod
+
+    method ActionValue#(Bit#(TAdd#(n,n))) result() if (i == fromInteger(valueOf(n)));
+        return p[valueOf(TAdd#(n,n)):1];
+    endmethod
+
 endmodule
 
 
