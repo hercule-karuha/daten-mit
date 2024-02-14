@@ -95,3 +95,7 @@ Current Bits	Previous Bit	Original Booth Encoding	    Radix-4 Booth Encoding
 This would be like doing 3 steps of the radix-2 Booth multiplier in a single step. 
 Can all radix-8 Booth encodings be represented with only one non-zero symbol like the radix-4 Booth multiplier? 
 Do you think it would still make sense to make a radix-8 Booth multiplier?
+
+No.
+Such as Original Booth Encoding "+--" can't be represented with only one non-zero symbol.
+Not make sense.
