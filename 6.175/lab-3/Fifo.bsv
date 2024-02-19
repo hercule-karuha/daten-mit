@@ -14,6 +14,45 @@ endinterface
 // Exercise 1
 module mkFifo(Fifo#(3,t)) provisos (Bits#(t,tSz));
    // define your own 3-elements fifo here.     
+   Ehr#(2, t) da <- mkEhr(?);
+   Ehr#(2, Bool) va <- mkEhr(False);
+   Ehr#(2, t) db <- mkEhr(?);
+   Ehr#(2, Bool) vb <- mkEhr(False);
+   Ehr#(2, t) dc <- mkEhr(?);
+   Ehr#(2, Bool) vc <- mkEhr(False);
+
+    rule canonicalize;
+        if( vb[1] && !va[1] ) begin
+            da[1] <= db[1];
+            va[1] <= True;
+            vb[1] <= False;
+        end
+    endrule
+
+    rule canonicalize1;
+        if( vc[1] && !vb[1] ) begin
+            db[1] <= dc[1];
+            vb[1] <= True;
+            vc[1] <= False;
+        end
+    endrule
+
+    method Action enq(t x) if(!vc[0]);
+        dc[0] <= x;
+        vc[0] <= True;
+    endmethod
+
+    method Action deq() if(va[0]);
+        va[0] <= False;
+    endmethod
+
+    method t first if (va[0]);
+        return da[0];
+    endmethod
+
+    method Bool notEmpty();
+        return va[0];
+    endmethod
 
 endmodule
 
