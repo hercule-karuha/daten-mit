@@ -120,6 +120,12 @@ endmodule
 // Exercise 3
 (* synthesize *)
 module mkFftElasticPipeline(Fft);
-   
+    // FIFOF#(Vector#(FftPoints, ComplexData)) inFifo <- mkFIFOF;
+    // FIFOF#(Vector#(FftPoints, ComplexData)) outFifo <- mkFIFOF;
+    // Vector#(NumStages, Vector#(BflysPerStage, Bfly4)) bfly1 <- replicateM(replicateM(mkBfly4));
+    // Vector#(NumStages, Vector#(BflysPerStage, Bfly4)) bfly2 <- replicateM(replicateM(mkBfly4));
+    // Vector#(NumStages, Vector#(BflysPerStage, Bfly4)) bfly3 <- replicateM(replicateM(mkBfly4));
+
+
 endmodule
 

@@ -21,20 +21,16 @@ module mkFifo(Fifo#(3,t)) provisos (Bits#(t,tSz));
    Ehr#(2, t) dc <- mkEhr(?);
    Ehr#(2, Bool) vc <- mkEhr(False);
 
-    rule canonicalize;
-        if( vb[1] && !va[1] ) begin
-            da[1] <= db[1];
-            va[1] <= True;
-            vb[1] <= False;
-        end
+    rule canonicalize(vb[1] && !va[1]);
+        da[1] <= db[1];
+        va[1] <= True;
+        vb[1] <= False;
     endrule
 
-    rule canonicalize1;
-        if( vc[1] && !vb[1] ) begin
-            db[1] <= dc[1];
-            vb[1] <= True;
-            vc[1] <= False;
-        end
+    rule canonicalize1(vc[1] && !vb[1]);
+        db[1] <= dc[1];
+        vb[1] <= True;
+        vc[1] <= False;
     endrule
 
     method Action enq(t x) if(!vc[0]);
