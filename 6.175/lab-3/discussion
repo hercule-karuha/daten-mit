@@ -1,0 +1,19 @@
+Discussion Question 1:
+What is the source of the performance gap between your two elastic implementations 
+(when it is using the class fifo and when it is using your own fifo)?
+
+my fifo: 260 cycles
+class fifo: 193 cycles
+
+because my fifo is not enough concurrency
+
+Discussion Question 2:
+Assume you are given a black box module that performs a 10-stage algorithm. 
+You can not look at its internal implementation, 
+but you can test this module by giving it data and looking at the output of the module. 
+You have been told that it is implemented as one of the structures covered in this lab, but you do not know which one. 
+How can you tell if it is inelastic or if it is elastic?
+
+
+Continuously providing input without processing output, observe if it leads to the inability to continue inputting. 
+Elastic pipelines can accommodate more input.
