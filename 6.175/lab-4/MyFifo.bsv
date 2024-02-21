@@ -18,6 +18,51 @@ endinterface
 
 // Exercise 1
 module mkMyConflictFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
+    Vector#(n, Reg#(t)) data <- replicateM(mkRegU);
+    Reg#(Bit#(TLog#(n))) enqp <- mkReg(0);
+    Reg#(Bit#(TLog#(n))) deqp <- mkReg(0);
+    Reg#(Bool) full <- mkReg(False);
+    Reg#(Bool) empty <- mkReg(True);
+
+    method Bool notFull;
+        return !full;
+    endmethod
+
+    method Action enq(t x) if(!full);
+        data[enqp] <= x;
+
+        enqp <= enqp + 1;
+        empty <= False;
+
+        if (enqp == deqp) begin
+            full <= True;
+        end
+    endmethod
+
+    method Bool notEmpty;
+        return !empty;
+    endmethod
+    
+    method Action deq if(!empty);
+        deqp <= deqp + 1;
+        full <= False;
+
+        if (enqp == deqp) begin
+            empty <= True;
+        end
+    endmethod
+
+    method t first if(!empty);
+        return data[deqp];
+    endmethod
+    
+    method Action clear;
+        enqp <= 0;
+        deqp <= 0;
+        empty <= True;
+        full <= False;
+    endmethod
+
 endmodule
 
 
