@@ -31,10 +31,11 @@ module mkMyConflictFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
     method Action enq(t x) if(!full);
         data[enqp] <= x;
 
-        enqp <= enqp + 1;
+        enqp <= enqp == fromInteger(valueOf(TSub#(n, 1))) ? 0 : enqp + 1;
         empty <= False;
+        
 
-        if (enqp == deqp) begin
+        if((deqp == 0 && enqp == fromInteger(valueOf(TSub#(n, 1)))) || enqp == deqp - 1) begin
             full <= True;
         end
     endmethod
@@ -44,10 +45,10 @@ module mkMyConflictFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
     endmethod
     
     method Action deq if(!empty);
-        deqp <= deqp + 1;
+        deqp <= deqp == fromInteger(valueOf(TSub#(n, 1))) ? 0 : deqp + 1;
         full <= False;
 
-        if (enqp == deqp) begin
+        if((enqp == 0 && deqp == fromInteger(valueOf(TSub#(n, 1)))) || deqp == enqp - 1) begin
             empty <= True;
         end
     endmethod
