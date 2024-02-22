@@ -152,7 +152,7 @@ module mkMyBypassFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
     endmethod
 
     method t first if(!empty[1]);
-        return data[deqP[0]];
+        return data[deqP[1]];
     endmethod
 
     method Action clear;
