@@ -85,8 +85,8 @@ module mkMyPipelineFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
     endmethod
 
     method Action enq(t x) if(!full[1]);
-        let next_enqP = enqP[0] == max_index ? 0 : enqP[0] + 1;
-        data[enqP[0]] <= x;
+        let next_enqP = enqP[1] == max_index ? 0 : enqP[1] + 1;
+        data[enqP[1]] <= x;
         enqP[1] <= next_enqP;
         empty[1] <= False;
         full[1] <= next_enqP == deqP[1] ? True : False;
@@ -98,7 +98,7 @@ module mkMyPipelineFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
 
     method Action deq if(!empty[0]);
         let next_deqP = deqP[0] == max_index ? 0 : deqP[0] + 1;
-        deqP[1] <= next_deqP;
+        deqP[0] <= next_deqP;
         full[0] <= False;
         empty[0] <= next_deqP == enqP[0] ? True : False;
     endmethod
@@ -135,7 +135,7 @@ module mkMyBypassFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
     method Action enq(t x) if(!full[0]);
         let next_enqP = enqP[0] == max_index ? 0 : enqP[0] + 1;
         data[enqP[0]] <= x;
-        enqP[1] <= next_enqP;
+        enqP[0] <= next_enqP;
         empty[0] <= False;
         full[0] <= next_enqP == deqP[0] ? True : False;
     endmethod
@@ -145,10 +145,10 @@ module mkMyBypassFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
     endmethod
 
     method Action deq if(!empty[1]);
-        let next_deqP = deqP[0] == max_index ? 0 : deqP[0] + 1;
+        let next_deqP = deqP[1] == max_index ? 0 : deqP[1] + 1;
         deqP[1] <= next_deqP;
-        full[0] <= False;
-        empty[1] <= next_deqP == enqP[0] ? True : False;
+        full[1] <= False;
+        empty[1] <= next_deqP == enqP[1] ? True : False;
     endmethod
 
     method t first if(!empty[1]);
