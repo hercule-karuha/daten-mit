@@ -1,0 +1,27 @@
+Discussion Question 1 (5 points): What registers are read from and written to in each of the interface methods? 
+Remember that register reads performed in guards count.
+
+|             |           read           |           write          |
+|-------------|--------------------------|--------------------------|
+|   notFull   |           full           |                          |
+|     enq     |       full, enqP, deqP   |  data, empty, full, enqP |
+|  notEmpty   |          empty           |                          |
+|     deq     |      empty, enqP, deqP   |     empty, full, deqP    |
+|    first    |        empty, data       |                          |
+|    clear    |                          | enqP, deqP, empty, full  |
+
+Discussion Question 2 (5 Points): Fill out the conflict matrix for mkMyConflictFifo. 
+For simplicity, treat writes to the same register as conflicting (not just conflicting within a single rule).
+
+|               |    notFull    |     enq       |   notEmpty    |    deq        |    first      |    clear      |
+|---------------|---------------|---------------|---------------|---------------|---------------|---------------|
+|    notFull    |      CF       |       <       |      CF       |       <       |      CF       |       <       |
+|      enq      |       >       |       C       |       >       |       C       |       >       |       C       |
+|    notEmpty   |      CF       |       <       |      CF       |       <       |      CF       |       <       |
+|      deq      |       >       |       C       |       >       |       C       |       >       |       C       |
+|     first     |      CF       |       <       |      CF       |       <       |      CF       |       <       |
+|    clear      |       >       |       C       |       >       |       C       |       >       |       C       |
+
+
+
+
