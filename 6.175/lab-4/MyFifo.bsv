@@ -120,7 +120,7 @@ endmodule
 // Intended schedule:
 //      {notFull, enq} < {notEmpty, first, deq} < clear
 module mkMyBypassFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
-    Vector#(n, Reg#(t)) data <- replicateM(mkRegU);
+    Vector#(n, Ehr#(2, t)) data <- replicateM(mkEhr(?));
     Ehr#(3, Bit#(TLog#(n))) enqP <- mkEhr(0);
     Ehr#(3, Bit#(TLog#(n))) deqP <- mkEhr(0);
     Ehr#(3, Bool) full <- mkEhr(False);
@@ -134,7 +134,7 @@ module mkMyBypassFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
 
     method Action enq(t x) if(!full[0]);
         let next_enqP = enqP[0] == max_index ? 0 : enqP[0] + 1;
-        data[enqP[0]] <= x;
+        data[enqP[0]][0] <= x;
         enqP[0] <= next_enqP;
         empty[0] <= False;
         full[0] <= next_enqP == deqP[0] ? True : False;
@@ -152,7 +152,7 @@ module mkMyBypassFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
     endmethod
 
     method t first if(!empty[1]);
-        return data[deqP[1]];
+        return data[deqP[1]][1];
     endmethod
 
     method Action clear;

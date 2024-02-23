@@ -22,6 +22,9 @@ For simplicity, treat writes to the same register as conflicting (not just confl
 |     first     |      CF       |       <       |      CF       |       <       |      CF       |       <       |
 |    clear      |       >       |       C       |       >       |       C       |       >       |       C       |
 
+Discussion Question 3 (5 Points): Using your conflict matrix for mkMyConflictFifo, 
+which conflicts do not match the conflict-free FIFO scheduling constraints shown above?
 
+enq C deq
 
 
