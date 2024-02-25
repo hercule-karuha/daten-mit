@@ -171,5 +171,77 @@ endmodule
 //      {notFull, enq} CF {notEmpty, first, deq}
 //      {notFull, enq, notEmpty, first, deq} < clear
 module mkMyCFFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
+    Vector#(n, Ehr#(2, t)) data <- replicateM(mkEhr(?));
+    Ehr#(3, Bit#(TLog#(n))) enqP <- mkEhr(0);
+    Ehr#(3, Bit#(TLog#(n))) deqP <- mkEhr(0);
+    Ehr#(3, Bool) full <- mkEhr(False);
+    Ehr#(3, Bool) empty <- mkEhr(True);
+
+    Ehr#(3, Maybe#(t)) enq_ehr <- mkEhr(?);
+    Ehr#(3, Bool) deq_ehr <- mkEhr(?);
+
+    Bit#(TLog#(n)) max_index = fromInteger(valueOf(TSub#(n,1)));
+
+    function Bit#(TLog#(n)) next_index(Bit#(TLog#(n)) pointer);
+        return pointer == max_index ? 0 : pointer + 1;
+    endfunction
+
+    (* no_implicit_conditions *)
+    (* fire_when_enabled *)
+    rule enq_and_deq;
+        let next_enqP = isValid(enq_ehr[1]) ? next_index(enqP[1]) : enqP[1];
+        let next_deqP = deq_ehr[1] ? next_index(deqP[1]) : deqP[1];
+
+        if(isValid(enq_ehr[1])) begin
+            data[enqP[1]][1] <= fromMaybe(?, enq_ehr[1]);
+        end
+
+        enqP[1] <= next_enqP;
+        deqP[1] <= next_deqP;
+        
+        if(next_deqP==next_enqP) begin
+            if(isValid(enq_ehr[1]))
+                full[1] <= True;
+            else if(deq_ehr[1])
+                empty[1] <= True;
+        end
+        else begin
+            if(isValid(enq_ehr[1]))
+                empty[1] <= False;
+            if(deq_ehr[1])
+                full[1] <= False;
+        end
+
+        enq_ehr[1] <= tagged Invalid;
+        deq_ehr[1] <= False;
+
+    endrule
+    
+    method Bool notFull;
+        return !full[0];
+    endmethod
+
+    method Action enq(t x) if(!full[0]);
+        enq_ehr[0] <= tagged Valid x;
+    endmethod
+
+    method Bool notEmpty;
+        return !empty[0];
+    endmethod
+
+    method Action deq if(!empty[0]);
+        deq_ehr[0] <= True;
+    endmethod
+
+    method t first if(!empty[0]);
+        return data[deqP[0]][0];
+    endmethod
+
+    method Action clear;
+        enqP[2] <= 0;
+        deqP[2] <= 0;
+        empty[2] <= True;
+        full[2] <= False;
+    endmethod
 endmodule
 
