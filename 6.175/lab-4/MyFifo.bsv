@@ -177,8 +177,8 @@ module mkMyCFFifo( Fifo#(n, t) ) provisos (Bits#(t,tSz));
     Ehr#(3, Bool) full <- mkEhr(False);
     Ehr#(3, Bool) empty <- mkEhr(True);
 
-    Ehr#(3, Maybe#(t)) enq_ehr <- mkEhr(?);
-    Ehr#(3, Bool) deq_ehr <- mkEhr(?);
+    Ehr#(2, Maybe#(t)) enq_ehr <- mkEhr(?);
+    Ehr#(2, Bool) deq_ehr <- mkEhr(?);
 
     Bit#(TLog#(n)) max_index = fromInteger(valueOf(TSub#(n,1)));
 

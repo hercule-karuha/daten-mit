@@ -27,4 +27,8 @@ which conflicts do not match the conflict-free FIFO scheduling constraints shown
 
 enq C deq
 
+Discussion Question 4 (5 Points): In your design of the clear() method, 
+how did you force the scheduling constraint {enq, deq} < clear?
+
+write the later port of the EHR
 
