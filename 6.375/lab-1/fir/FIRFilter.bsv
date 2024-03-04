@@ -17,12 +17,13 @@ module mkFIRFilter (AudioProcessor);
     rule putMulOperand (True);
         Sample sample = infifo.first();
         infifo.deq();
-        multipliers[0].putOperands(c[0], sample);
 
+        r[0] <= sample;
         for (Integer i = 0; i < 7; i = i+1) begin
             r[i+1] <= r[i];
         end
-
+        
+        multipliers[0].putOperands(c[0], sample);
         for(Integer i = 0; i < 8 ;i = i+1) begin
             multipliers[i+1].putOperands(c[i+1], r[i]);
         end
