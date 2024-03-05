@@ -24,9 +24,9 @@ endfunction
 
 // Generate a table of all the needed twiddle factors.
 // The table can be used for looking up a twiddle factor dynamically.
-typedef Vector#(TLog#(fft_points), Vector#(TDiv#(fft_points, 2), ComplexSample)) TwiddleTable;
-function TwiddleTable genTwiddles();
-    TwiddleTable twids = newVector;
+typedef Vector#(TLog#(fft_points), Vector#(TDiv#(fft_points, 2), ComplexSample)) TwiddleTable#(numeric type fft_points);
+function TwiddleTable#(fft_points) genTwiddles();
+    TwiddleTable#(fft_points) twids = newVector;
     for (Integer s = 0; s < valueof(TLog#(fft_points)); s = s+1) begin
         for (Integer i = 0; i < valueof(TDiv#(fft_points, 2)); i = i+1) begin
             twids[s][i] = getTwiddle(s, i, valueof(fft_points));
@@ -75,7 +75,10 @@ endfunction
 // permutation.
 // We pass the table of twiddles as an argument so we can look those up
 // dynamically if need be.
-function Vector#(fft_points, ComplexSample) stage_ft(TwiddleTable twiddles, Bit#(TLog#(TLog#(fft_points))) stage, Vector#(fft_points, ComplexSample) stage_in);
+function Vector#(fft_points, ComplexSample) stage_ft(TwiddleTable#(fft_points) twiddles, 
+                                                    Bit#(TLog#(TLog#(fft_points))) stage, 
+                                                    Vector#(fft_points, ComplexSample) stage_in)
+                                                    provisos(Add#(2, a__, fft_points));
     Vector#(fft_points, ComplexSample) stage_temp = newVector();
     for(Integer i = 0; i < (valueof(fft_points)/2); i = i+1) begin    
         Integer idx = i * 2;
@@ -93,10 +96,10 @@ function Vector#(fft_points, ComplexSample) stage_ft(TwiddleTable twiddles, Bit#
     return stage_out;
 endfunction
 
-module mkCombinationalFFT (FFT#(fft_points));
+module mkCombinationalFFT (FFT#(fft_points)) provisos(Add#(2, a__, fft_points));
 
   // Statically generate the twiddle factors table.
-  TwiddleTable twiddles = genTwiddles();
+  TwiddleTable#(fft_points) twiddles = genTwiddles();
 
   // Define the stage_f function which uses the generated twiddles.
   function Vector#(fft_points, ComplexSample) stage_f(Bit#(TLog#(TLog#(fft_points))) stage, Vector#(fft_points, ComplexSample) stage_in);
@@ -130,8 +133,8 @@ module mkCombinationalFFT (FFT#(fft_points));
 
 endmodule
 
-module mkLinearFFT (FFT#(fft_points));
-    TwiddleTable twiddles = genTwiddles();
+module mkLinearFFT (FFT#(fft_points)) provisos(Add#(2, a__, fft_points));
+    TwiddleTable#(fft_points) twiddles = genTwiddles();
 
     function Vector#(fft_points, ComplexSample) stage_f(Bit#(TLog#(TLog#(fft_points))) stage, Vector#(fft_points, ComplexSample) stage_in);
         return stage_ft(twiddles, stage, stage_in);
@@ -165,8 +168,8 @@ module mkLinearFFT (FFT#(fft_points));
 
 endmodule
 
-module mkCircularFFT (FFT#(fft_points));
-    TwiddleTable twiddles = genTwiddles();
+module mkCircularFFT (FFT#(fft_points)) provisos(Add#(2, a__, fft_points));
+    TwiddleTable#(fft_points) twiddles = genTwiddles();
 
     function Vector#(fft_points, ComplexSample) stage_f(Bit#(TLog#(TLog#(fft_points))) stage, Vector#(fft_points, ComplexSample) stage_in);
         return stage_ft(twiddles, stage, stage_in);
@@ -207,11 +210,11 @@ endmodule
 
 
 // Wrapper around The FFT module we actually want to use
-module mkFFT (FFT#(fft_points));
+module mkFFT (FFT#(fft_points)) provisos(Add#(2, a__, fft_points));
 
     // FFT fft <- mkCombinationalFFT();
     // FFT fft <- mkLinearFFT();
-    FFT fft <- mkCircularFFT(fft_points);
+    FFT#(fft_points) fft <- mkCircularFFT();
     
     interface Put request = fft.request;
     interface Get response = fft.response;
@@ -219,9 +222,9 @@ endmodule
 
 // Inverse FFT, based on the mkFFT module.
 // ifft[k] = fft[N-k]/N
-module mkIFFT (FFT#(fft_points));
+module mkIFFT (FFT#(fft_points)) provisos(Add#(2, a__, fft_points));
 
-    FFT fft <- mkFFT();
+    FFT#(fft_points) fft <- mkFFT();
     FIFO#(Vector#(fft_points, ComplexSample)) outfifo <- mkFIFO();
 
     Integer n = valueof(fft_points);
