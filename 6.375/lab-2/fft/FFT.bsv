@@ -210,6 +210,7 @@ endmodule
 module mkFFT (FFT);
 
     // FFT fft <- mkCombinationalFFT();
+    // FFT fft <- mkLinearFFT();
     FFT fft <- mkCircularFFT();
     
     interface Put request = fft.request;
