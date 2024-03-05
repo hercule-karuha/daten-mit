@@ -14,7 +14,7 @@ interface AudioProcessor;
 endinterface
 
 
-typedef Complex#(FixedPoint#(32, 32)) ComplexSample;
+typedef Complex#(FixedPoint#(16, 16)) ComplexSample;
 
 // Turn a real Sample into a ComplexSample.
 function ComplexSample tocmplx(Sample x);
@@ -27,6 +27,6 @@ function Sample frcmplx(ComplexSample x);
 endfunction
 
 
-typedef 256 FFT_POINTS;
+typedef 8 FFT_POINTS;
 typedef TLog#(FFT_POINTS) FFT_LOG_POINTS;
 
