@@ -130,9 +130,46 @@ module mkCombinationalFFT (FFT);
 
 endmodule
 
+module mkLinearFFT (FFT);
+    TwiddleTable twiddles = genTwiddles();
+
+    function Vector#(FFT_POINTS, ComplexSample) stage_f(Bit#(TLog#(FFT_LOG_POINTS)) stage, Vector#(FFT_POINTS, ComplexSample) stage_in);
+        return stage_ft(twiddles, stage, stage_in);
+    endfunction
+
+    FIFO#(Vector#(FFT_POINTS, ComplexSample)) inputFIFO  <- mkFIFO(); 
+    FIFO#(Vector#(FFT_POINTS, ComplexSample)) outputFIFO <- mkFIFO(); 
+    FIFO#(Vector#(FFT_POINTS, ComplexSample)) fifo1 <- mkFIFO(); 
+    FIFO#(Vector#(FFT_POINTS, ComplexSample)) fifo2 <- mkFIFO();
+
+    rule stage1;
+        fifo1.enq(stage_f(0, inputFIFO.first));
+        inputFIFO.deq;
+    endrule
+    rule stage2;
+        fifo2.enq(stage_f(1, fifo1.first));
+        fifo1.deq;
+    endrule
+    rule stage3;
+        outputFIFO.enq(stage_f(2, fifo2.first));
+        fifo2.deq;
+    endrule    
+
+    interface Put request;
+        method Action put(Vector#(FFT_POINTS, ComplexSample) x);
+            inputFIFO.enq(bitReverse(x));
+        endmethod
+    endinterface
+
+    interface Get response = toGet(outputFIFO);
+
+endmodule
+
 // Wrapper around The FFT module we actually want to use
 module mkFFT (FFT);
-    FFT fft <- mkCombinationalFFT();
+
+    // FFT fft <- mkCombinationalFFT();
+    FFT fft <- mkLinearFFT();
     
     interface Put request = fft.request;
     interface Get response = fft.response;
