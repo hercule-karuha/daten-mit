@@ -1,6 +1,6 @@
 BSVBASEDIR=$(abspath ..)
 BASEDIR=$(abspath .)
-# CONNECTALDIR=/opt/connectal
+CONNECTALDIR=/mit/6.375/lab2019f/connectal
 
 # Define HW->SW / SW->HW interfaces
 S2H_INTERFACES = MyDutRequest:MyDut.request
@@ -15,7 +15,7 @@ BSVDIR = $(BSVBASEDIR)/common:$(BSVBASEDIR)/fft:$(BSVBASEDIR)/fir:$(BSVBASEDIR)/
 CONNECTALFLAGS += --mainclockperiod 15
 CONNECTALFLAGS += --bsvpath $(BSVDIR) --bscflags " -u --keep-fires "
 
-include /opt/connectal/Makefile.connectal
+include $(CONNECTALDIR)/Makefile.connectal
 
 .PHONY: simulation fpga fpgaUpdateSW run_simulation run_fpga program_fpga run_fpgaSW
 
