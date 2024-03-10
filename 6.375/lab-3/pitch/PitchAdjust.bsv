@@ -20,7 +20,7 @@ typedef Server#(
 // factor - the amount to adjust the pitch.
 //  1.0 makes no change. 2.0 goes up an octave, 0.5 goes down an octave, etc...
 module mkPitchAdjust(Integer s, FixedPoint#(isize, fsize) factor, PitchAdjust#(nbins, isize, fsize, psize) ifc)
-provisos (Add#(b__, TLog#(TMul#(nbins,2)), isize), Add#(psize, a__, isize));
+provisos (Add#(b__, TLog#(TMul#(nbins,2)), isize), Add#(psize, a__, isize), Add#(c__, psize, TAdd#(isize, isize)));
     
     FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) inputFIFO  <- mkFIFO();
     FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) outputFIFO <- mkFIFO();
@@ -34,11 +34,11 @@ provisos (Add#(b__, TLog#(TMul#(nbins,2)), isize), Add#(psize, a__, isize));
     Reg#(Bit#(TLog#(TMul#(nbins,2)))) i <- mkReg(0);
     Reg#(Bool) inputReady <- mkReg(False);
 
-    rule getInput (i == 0);
+    rule getInput (i == 0 && !inputReady);
         in <= inputFIFO.first;
+        inputFIFO.deq;
         out <= replicate(cmplxmp(0, 0));
         inputReady <= True;
-        inputFIFO.deq;
     endrule
 
     rule pitchAdjust (i < fromInteger(valueOf(nbins)) && inputReady);
@@ -50,13 +50,12 @@ provisos (Add#(b__, TLog#(TMul#(nbins,2)), isize), Add#(psize, a__, isize));
         Int#(isize) bin = fxptGetInt(fromInt(iInt) * factor);
         Int#(isize) nbin = fxptGetInt(fromInt(iInt + 1) * factor);
 
-        FixedPoint#(isize, fsize) dphaseFxp = fromInt(dphase);
-
         if (bin < fromInteger(valueOf(nbins)) && bin >= 0 && nbin != bin) begin
-            Phase#(psize) shifted = truncate(fxptGetInt(dphaseFxp * factor));
-            outphases[bin] <= outphases[bin] + shifted;
-            out[bin] <= cmplxmp(in[i].magnitude, outphases[bin] + shifted);
-            $display("write bin: ",fshow(bin)," nbin: ",fshow(nbin)," shifted: ",fshow(shifted));
+            FixedPoint#(isize, fsize) dphaseFxp = fromInt(dphase);
+            Phase#(psize) shifted = truncate(fxptGetInt(fxptMult(dphaseFxp, factor)));
+            let outphase = outphases[bin] + shifted;
+            outphases[bin] <= outphase;
+            out[bin] <= cmplxmp(in[i].magnitude, outphase);
         end
         i <= i + 1;
     endrule
@@ -65,6 +64,7 @@ provisos (Add#(b__, TLog#(TMul#(nbins,2)), isize), Add#(psize, a__, isize));
         outputFIFO.enq(out);
         i <= 0;
         inputReady <= False;
+        in <= replicate(cmplxmp(0, 0));
     endrule
 
     interface Put request;
