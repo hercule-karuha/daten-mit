@@ -20,7 +20,7 @@ typedef Server#(
 // factor - the amount to adjust the pitch.
 //  1.0 makes no change. 2.0 goes up an octave, 0.5 goes down an octave, etc...
 module mkPitchAdjust(Integer s, FixedPoint#(isize, fsize) factor, PitchAdjust#(nbins, isize, fsize, psize) ifc)
-provisos (Add#(b__, TLog#(TMul#(2,nbins)), isize), Add#(psize, a__, isize));
+provisos (Add#(b__, TLog#(TMul#(nbins,2)), isize), Add#(psize, a__, isize));
     
     FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) inputFIFO  <- mkFIFO();
     FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) outputFIFO <- mkFIFO();
@@ -28,26 +28,41 @@ provisos (Add#(b__, TLog#(TMul#(2,nbins)), isize), Add#(psize, a__, isize));
     Vector#(nbins, Reg#(Phase#(psize))) inphases  <- replicateM(mkReg(0));
     Vector#(nbins, Reg#(Phase#(psize))) outphases <- replicateM(mkReg(0));
 
+    Reg#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) in <- mkRegU();
     Reg#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) out <- mkRegU();
 
-    rule pitchAdjust;
-        let inCmps =  inputFIFO.first;
+    Reg#(Bit#(TLog#(TMul#(nbins,2)))) i <- mkReg(0);
+    Reg#(Bool) inputReady <- mkReg(False);
+
+    rule getInput (i == 0);
+        in <= inputFIFO.first;
+        inputReady <= True;
         inputFIFO.deq;
-        for(Integer i = 0; i < valueOf(nbins); i = i + 1) begin
-            Phase#(psize) phase = phaseof(inCmps[i]);
-            Phase#(psize) dphase = phase - inphases[i];
-            inphases[i] <= phase;
+    endrule
 
-            Int#(isize) iInt = fromInteger(i);
-            Int#(isize) bin = fxptGetInt(fromInt(iInt) * factor);
+    rule pitchAdjust (i < fromInteger(valueOf(nbins)) && inputReady);
+        Phase#(psize) phase = phaseof(in[i]);
+        Phase#(psize) dphase = phase - inphases[i];
+        inphases[i] <= phase;
 
-            if (bin < fromInteger(valueOf(nbins))) begin
-            Phase#(psize) shifted = truncate(fxptGetInt(fromInt(dphase) * factor));
+        Int#(isize) iInt = unpack(extend(i));
+        Int#(isize) bin = fxptGetInt(fromInt(iInt) * factor);
+        Int#(isize) nbin = fxptGetInt(fromInt(iInt + 1) * factor);
+
+        FixedPoint#(isize, fsize) dphaseFxp = fromInt(dphase);
+
+        if (bin < fromInteger(valueOf(nbins)) && bin >= 0 && nbin != bin) begin
+            Phase#(psize) shifted = truncate(fxptGetInt(dphaseFxp * factor));
             outphases[bin] <= outphases[bin] + shifted;
-            out[bin] <= cmplxmp(inCmps[i].magnitude, outphases[bin] + shifted);
-            end
+            out[bin] <= cmplxmp(in[i].magnitude, outphases[bin] + shifted);
         end
+        i <= i + 1;
+    endrule
+
+    rule outputResult (i == fromInteger(valueOf(nbins)));
         outputFIFO.enq(out);
+        i <= 0;
+        inputReady <= False;
     endrule
 
     interface Put request;
