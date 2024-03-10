@@ -36,6 +36,7 @@ provisos (Add#(b__, TLog#(TMul#(nbins,2)), isize), Add#(psize, a__, isize));
 
     rule getInput (i == 0);
         in <= inputFIFO.first;
+        out <= replicate(cmplxmp(0, 0));
         inputReady <= True;
         inputFIFO.deq;
     endrule
@@ -55,6 +56,7 @@ provisos (Add#(b__, TLog#(TMul#(nbins,2)), isize), Add#(psize, a__, isize));
             Phase#(psize) shifted = truncate(fxptGetInt(dphaseFxp * factor));
             outphases[bin] <= outphases[bin] + shifted;
             out[bin] <= cmplxmp(in[i].magnitude, outphases[bin] + shifted);
+            $display("write bin: ",fshow(bin)," nbin: ",fshow(nbin)," shifted: ",fshow(shifted));
         end
         i <= i + 1;
     endrule
