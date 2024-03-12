@@ -1,14 +1,24 @@
 
 import ClientServer::*;
 import GetPut::*;
+import AudioProcessorTypes::*;
+
+import Vector::*;
+
+import OverSampler::*;
+import Overlayer::*;
 
 import FixedPoint::*;
-import AudioProcessorTypes::*;
+
 import Chunker::*;
+
 import FFT::*;
+
 import FIRFilter::*;
+
 import Splitter::*;
 import FilterCoefficients::*;
+
 import FromMP::*;
 import ToMP::*;
 import PitchAdjust::*;
@@ -16,22 +26,34 @@ import PitchAdjust::*;
 module mkAudioPipeline(AudioProcessor);
 
     AudioProcessor fir <- mkFIRFilter(c);
-    Chunker#(FFT_POINTS, ComplexSample) chunker <- mkChunker();
+    Chunker#(SHIFTED, Sample) chunker <- mkChunker();
+
+    Vector#(FFT_POINTS, Sample) init_vec = replicate(0);
+    OverSampler#(SHIFTED, FFT_POINTS, Sample) over_sampler <- mkOverSampler(init_vec);
     FFT#(FFT_POINTS, FixedPoint#(16, 16)) fft <- mkFFT();
+
     ToMP#(FFT_POINTS, 16, 16, PSIZE) tomp <- mkToMP();
     PitchAdjust#(FFT_POINTS, 16, 16, PSIZE) adjust <- mkPitchAdjust(2, 2.0);
     FromMP#(FFT_POINTS, 16, 16, PSIZE) frommp <- mkFromMP();
+
     FFT#(FFT_POINTS, FixedPoint#(16, 16)) ifft <- mkIFFT();
-    Splitter#(FFT_POINTS, ComplexSample) splitter <- mkSplitter();
+    Overlayer#(FFT_POINTS, SHIFTED, Sample) over_layer <- mkOverlayer(init_vec);
+    
+    Splitter#(SHIFTED, Sample) splitter <- mkSplitter();
 
     rule fir_to_chunker (True);
         let x <- fir.getSampleOutput();
-        chunker.request.put(tocmplx(x));
+        chunker.request.put(x);
     endrule
 
-    rule chunker_to_fft (True);
+    rule chunker_to_oversampler (True);
         let x <- chunker.response.get();
-        fft.request.put(x);
+        over_sampler.request.put(x);
+    endrule
+
+    rule oversampler_to_fft (True);
+        let x <- over_sampler.response.get();
+        fft.request.put(tocmplx_vec(x));
     endrule
 
     rule fft_to_tomp (True);
@@ -54,8 +76,13 @@ module mkAudioPipeline(AudioProcessor);
         ifft.request.put(x);
     endrule
 
-    rule ifft_to_splitter (True);
+    rule ifft_to_overlayer (True);
         let x <- ifft.response.get();
+        over_layer.request.put(frcmplx_vec(x));
+    endrule
+
+    rule overlayer_to_splitter (True);
+        let x <- over_layer.response.get();
         splitter.request.put(x);
     endrule
     
@@ -65,8 +92,7 @@ module mkAudioPipeline(AudioProcessor);
 
     method ActionValue#(Sample) getSampleOutput();
         let x <- splitter.response.get();
-        return frcmplx(x);
+        return x;
     endmethod
 
 endmodule
-

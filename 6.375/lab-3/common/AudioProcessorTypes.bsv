@@ -6,6 +6,8 @@ import Reg6375::*;
 export AudioProcessorTypes::*;
 export Reg6375::*;
 
+import Vector::*;
+
 typedef Int#(16) Sample;
 
 interface AudioProcessor;
@@ -26,10 +28,25 @@ function Sample frcmplx(ComplexSample x);
     return unpack(truncate(x.rel.i));
 endfunction
 
+function Vector#(len, ComplexSample) tocmplx_vec(Vector#(len, Sample) x);
+    Vector#(len, ComplexSample) res;
+    for (Integer i = 0; i < valueOf(len); i = i + 1) begin
+        res[i] = tocmplx(x[i]);
+    end
+    return res;
+endfunction
+
+function Vector#(len, Sample) frcmplx_vec(Vector#(len, ComplexSample) x);
+    Vector#(len, Sample) res;
+    for (Integer i = 0; i < valueOf(len); i = i + 1) begin
+        res[i] = frcmplx(x[i]);
+    end
+    return res;
+endfunction
 
 typedef 8 FFT_POINTS;
 typedef TLog#(FFT_POINTS) FFT_LOG_POINTS;
 
 typedef 16 PSIZE;
-// typedef 2 FACTOR;
-// typedef 2 SHIFTED;
+typedef 2 FACTOR;
+typedef 2 SHIFTED;
