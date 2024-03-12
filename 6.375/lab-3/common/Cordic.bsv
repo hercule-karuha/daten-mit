@@ -277,66 +277,71 @@ endmodule
 typedef Server#(
     Vector#(nbins, Complex#(FixedPoint#(isize, fsize))),
     Vector#(nbins, ComplexMP#(isize, fsize, psize))
-) ToMP#(numeric type isize, numeric type fsize, numeric type psize);
+) ToMP#(numeric type nbins, numeric type isize, numeric type fsize, numeric type psize);
 
 typedef Server#(
     Vector#(nbins, ComplexMP#(isize, fsize, psize)),
     Vector#(nbins, Complex#(FixedPoint#(isize, fsize)))
-) FromMP#(numeric type isize, numeric type fsize, numeric type psize);
+) FromMP#(numeric type nbins, numeric type isize, numeric type fsize, numeric type psize);
 
-module mkToMP(ToMP#(isize, fsize, psize));
+module mkToMP(ToMP#(nbins, isize, fsize, psize));
     FIFO#(Vector#(nbins, Complex#(FixedPoint#(isize, fsize)))) infifo <- mkFIFO();
     FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) outfifo <- mkFIFO();
 
 
     Vector#(nbins, ToMagnitudePhase#(isize, fsize, psize)) toMps <- replicateM(mkCordicToMagnitudePhase());
+    Reg#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) outputs <- mkRegU;
+    Reg#(Bool) inputReady <- mkReg(False);
 
-    rule getInput;
+    rule getInput(!inputReady);
         Vector#(nbins, Complex#(FixedPoint#(isize, fsize))) inputs = infifo.first;
         infifo.deq;
 
-        for(Integer i = 0; i < nbins; i = i + 1) begin
+        for(Integer i = 0; i < valueOf(nbins); i = i + 1) begin
             toMps[i].request.put(inputs[i]);
         end
+        inputReady <= True;
     endrule
 
-    rule getOutput;
-        Vector#(nbins, ComplexMP#(isize, fsize, psize)) outputs;
-
-        for(Integer i = 0; i < nbins; i = i + 1)begin
-            outputs[i] = toMps[i].request.get;
+    rule getOutput(inputReady);
+        for(Integer i = 0; i < valueOf(nbins); i = i + 1)begin
+            outputs[i] <= toMps[i].response.get();
         end
 
-        outputFIFO.enq(outputs);
+        outfifo.enq(outputs);
+        inputReady <= False;
     endrule
 
     interface Put request = toPut(infifo);
     interface Get response = toGet(outfifo);
 endmodule
 
-module mkFromMP(ToMP#(isize, fsize, psize));
+module mkFromMP(ToMP#(nbins, isize, fsize, psize));
     FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) infifo <- mkFIFO();
     FIFO#(Vector#(nbins, Complex#(FixedPoint#(isize, fsize)))) outfifo <- mkFIFO();
 
     Vector#(nbins, FromMagnitudePhase#(isize, fsize, spsize)) fromMps <- replicateM(mkCordicFromMagnitudePhase());
+    Reg#(Vector#(nbins, Complex#(FixedPoint#(isize, fsize)))) outputs <- mkRegU;
+    Reg#(Bool) inputReady <- mkReg(False);
 
-    rule getInput;
+    rule getInput(!inputReady);
         Vector#(nbins, ComplexMP#(isize, fsize, psize)) inputs = infifo.first;
         infifo.deq;
-
-        for(Integer i = 0; i < nbins; i = i + 1) begin
+        for(Integer i = 0; i < valueOf(nbins); i = i + 1) begin
             fromMps[i].request.put(inputs[i]);
         end
+        inputReady <= True;
     endrule
 
-    rule getOutput;
-        Vector#(nbins, Complex#(FixedPoint#(isize, fsize))) outputs;
+    rule getOutput(inputReady);
 
-        for(Integer i = 0; i < nbins; i = i + 1) begin
-            outputs[i] = fromMps[i].request.get;
+        for(Integer i = 0; i < valueOf(nbins); i = i + 1) begin
+            outputs[i] <= fromMps[i].response.get();
         end
 
-        outputFIFO.enq(outputs);
+        outfifo.enq(outputs);
+
+        inputReady <= False;
     endrule
 
     interface Put request = toPut(infifo);
