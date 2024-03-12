@@ -219,9 +219,9 @@ endmodule
 module mkFFT (FFT#(fft_points, cmplxd)) provisos(Add#(2, a__, fft_points), Mul#(fft_points, b__, c__), Bits#(cmplxd, d__), Add#(d__, d__, b__), Arith#(cmplxd),
 RealLiteral#(cmplxd));
 
-    // FFT fft <- mkCombinationalFFT();
+    FFT#(fft_points, cmplxd) fft <- mkCombinationalFFT();
     // FFT fft <- mkLinearFFT();
-    FFT#(fft_points, cmplxd) fft <- mkCircularFFT();
+    // FFT#(fft_points, cmplxd) fft <- mkCircularFFT();
     
     interface Put request = fft.request;
     interface Get response = fft.response;

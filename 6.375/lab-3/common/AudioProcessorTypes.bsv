@@ -31,5 +31,5 @@ typedef 8 FFT_POINTS;
 typedef TLog#(FFT_POINTS) FFT_LOG_POINTS;
 
 typedef 16 PSIZE;
-typedef 2 FACTOR;
-typedef 2 SHIFTED;
+// typedef 2 FACTOR;
+// typedef 2 SHIFTED;
