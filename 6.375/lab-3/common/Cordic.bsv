@@ -290,7 +290,6 @@ module mkToMP(ToMP#(nbins, isize, fsize, psize));
 
 
     Vector#(nbins, ToMagnitudePhase#(isize, fsize, psize)) toMps <- replicateM(mkCordicToMagnitudePhase());
-    Reg#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) outputs <- mkRegU;
     Reg#(Bool) inputReady <- mkReg(False);
 
     rule getInput(!inputReady);
@@ -304,8 +303,9 @@ module mkToMP(ToMP#(nbins, isize, fsize, psize));
     endrule
 
     rule getOutput(inputReady);
-        for(Integer i = 0; i < valueOf(nbins); i = i + 1)begin
-            outputs[i] <= toMps[i].response.get();
+        Vector#(nbins, ComplexMP#(isize, fsize, psize)) outputs;
+        for(Integer i = 0; i < valueOf(nbins); i = i + 1) begin
+            outputs[i] <- toMps[i].response.get;
         end
 
         outfifo.enq(outputs);
@@ -316,12 +316,11 @@ module mkToMP(ToMP#(nbins, isize, fsize, psize));
     interface Get response = toGet(outfifo);
 endmodule
 
-module mkFromMP(ToMP#(nbins, isize, fsize, psize));
+module mkFromMP(FromMP#(nbins, isize, fsize, psize));
     FIFO#(Vector#(nbins, ComplexMP#(isize, fsize, psize))) infifo <- mkFIFO();
     FIFO#(Vector#(nbins, Complex#(FixedPoint#(isize, fsize)))) outfifo <- mkFIFO();
 
-    Vector#(nbins, FromMagnitudePhase#(isize, fsize, spsize)) fromMps <- replicateM(mkCordicFromMagnitudePhase());
-    Reg#(Vector#(nbins, Complex#(FixedPoint#(isize, fsize)))) outputs <- mkRegU;
+    Vector#(nbins, FromMagnitudePhase#(isize, fsize, psize)) fromMps <- replicateM(mkCordicFromMagnitudePhase());
     Reg#(Bool) inputReady <- mkReg(False);
 
     rule getInput(!inputReady);
@@ -334,13 +333,12 @@ module mkFromMP(ToMP#(nbins, isize, fsize, psize));
     endrule
 
     rule getOutput(inputReady);
-
+        Vector#(nbins, Complex#(FixedPoint#(isize, fsize))) outputs;
         for(Integer i = 0; i < valueOf(nbins); i = i + 1) begin
-            outputs[i] <= fromMps[i].response.get();
+            outputs[i] <- fromMps[i].response.get;
         end
 
         outfifo.enq(outputs);
-
         inputReady <= False;
     endrule
 
