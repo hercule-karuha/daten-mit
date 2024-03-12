@@ -19,7 +19,7 @@ module mkAudioPipeline(AudioProcessor);
     Chunker#(FFT_POINTS, ComplexSample) chunker <- mkChunker();
     FFT#(FFT_POINTS, FixedPoint#(16, 16)) fft <- mkFFT();
     ToMP#(FFT_POINTS, 16, 16, PSIZE) tomp <- mkToMP();
-    PitchAdjust#(FFT_POINTS, 16, 16, PSIZE) adjust <- mkPitchAdjust(2, 2);
+    PitchAdjust#(FFT_POINTS, 16, 16, PSIZE) adjust <- mkPitchAdjust(2, 2.0);
     FromMP#(FFT_POINTS, 16, 16, PSIZE) frommp <- mkFromMP();
     FFT#(FFT_POINTS, FixedPoint#(16, 16)) ifft <- mkIFFT();
     Splitter#(FFT_POINTS, ComplexSample) splitter <- mkSplitter();

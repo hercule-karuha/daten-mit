@@ -71,7 +71,7 @@ module mkCordicToMagnitudePhase (ToMagnitudePhase#(isize, fsize, psize));
     // Return the inverse cordic gain after all the iterations are done.
     // This should be evaluated statically.
     function FixedPoint#(isize, fsize) igain();
-        return fromReal(1/gain(valueof(psize)));
+        return fromReal(1/gain(valueOf(psize)));
     endfunction
 
     rule start (idle);
@@ -143,7 +143,7 @@ module mkCordicFromMagnitudePhase (FromMagnitudePhase#(isize, fsize, psize));
     // Return the inverse cordic gain after all the iterations are done.
     // This should be evaluated statically.
     function FixedPoint#(isize, fsize) igain();
-        return fromReal(1/gain(valueof(psize)));
+        return fromReal(1/gain(valueOf(psize)));
     endfunction
 
     rule start (idle);

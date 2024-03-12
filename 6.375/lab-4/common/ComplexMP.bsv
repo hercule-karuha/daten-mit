@@ -16,7 +16,7 @@ typedef Int#(n) Phase#(numeric type n);
 
 // Convert a real number (in radians) to phase.
 function Phase#(n) tophase(Real rads);
-    return unpack(fromInteger(round(rads * (2**(fromInteger(valueof(n)-1)))/ pi)));
+    return unpack(fromInteger(round(rads * (2**(fromInteger(valueOf(n)-1)))/ pi)));
 endfunction
 
 // A complex number in magnitude, phase format.

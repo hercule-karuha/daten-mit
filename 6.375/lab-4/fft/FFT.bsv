@@ -27,9 +27,9 @@ endfunction
 typedef Vector#(TLog#(fft_points), Vector#(TDiv#(fft_points, 2), Complex#(cmplxd))) TwiddleTable#(numeric type fft_points, type cmplxd);
 function TwiddleTable#(fft_points, cmplxd) genTwiddles() provisos (RealLiteral#(cmplxd));
     TwiddleTable#(fft_points,cmplxd) twids = newVector;
-    for (Integer s = 0; s < valueof(TLog#(fft_points)); s = s+1) begin
-        for (Integer i = 0; i < valueof(TDiv#(fft_points, 2)); i = i+1) begin
-            twids[s][i] = getTwiddle(s, i, valueof(fft_points));
+    for (Integer s = 0; s < valueOf(TLog#(fft_points)); s = s+1) begin
+        for (Integer i = 0; i < valueOf(TDiv#(fft_points, 2)); i = i+1) begin
+            twids[s][i] = getTwiddle(s, i, valueOf(fft_points));
         end
     end
     return twids;
@@ -53,7 +53,7 @@ endfunction
 // first or last phase of the FFT transformation.
 function Vector#(fft_points, Complex#(cmplxd)) bitReverse(Vector#(fft_points,Complex#(cmplxd)) inVector);
     Vector#(fft_points, Complex#(cmplxd)) outVector = newVector();
-    for(Integer i = 0; i < valueof(fft_points); i = i+1) begin   
+    for(Integer i = 0; i < valueOf(fft_points); i = i+1) begin   
         Bit#(TLog#(fft_points)) reversal = reverseBits(fromInteger(i));
         outVector[reversal] = inVector[i];           
     end  
@@ -77,7 +77,7 @@ endfunction
 // dynamically if need be.
 function Vector#(fft_points, Complex#(cmplxd)) stage_ft(TwiddleTable#(fft_points, cmplxd) twiddles, Bit#(TLog#(TLog#(fft_points))) stage, Vector#(fft_points, Complex#(cmplxd)) stage_in) provisos (Add#(2, a__, fft_points), Arith#(cmplxd));
     Vector#(fft_points, Complex#(cmplxd)) stage_temp = newVector();
-    for(Integer i = 0; i < (valueof(fft_points)/2); i = i+1) begin    
+    for(Integer i = 0; i < (valueOf(fft_points)/2); i = i+1) begin    
         Integer idx = i * 2;
         let twid = twiddles[stage][i];
         let y = bfly2(takeAt(idx, stage_in), twid);
@@ -87,8 +87,8 @@ function Vector#(fft_points, Complex#(cmplxd)) stage_ft(TwiddleTable#(fft_points
     end 
 
     Vector#(fft_points, Complex#(cmplxd)) stage_out = newVector();
-    for (Integer i = 0; i < valueof(fft_points); i = i+1) begin
-        stage_out[i] = stage_temp[permute(i, valueof(fft_points))];
+    for (Integer i = 0; i < valueOf(fft_points); i = i+1) begin
+        stage_out[i] = stage_temp[permute(i, valueOf(fft_points))];
     end
     return stage_out;
 endfunction
@@ -241,8 +241,8 @@ module mkIFFT (FFT#(fft_points, cmplxd)) provisos (Add#(2, a__, fft_points), Ari
     FFT#(fft_points, cmplxd) fft <- mkFFT();
     FIFO#(Vector#(fft_points, Complex#(cmplxd))) outfifo <- mkFIFO();
 
-    Integer n = valueof(fft_points);
-    Integer lgn = valueof(TLog#(fft_points));
+    Integer n = valueOf(fft_points);
+    Integer lgn = valueOf(TLog#(fft_points));
 
     function Complex#(cmplxd) scaledown(Complex#(cmplxd) x);
         return cmplx(x.rel >> lgn, x.img >> lgn);
