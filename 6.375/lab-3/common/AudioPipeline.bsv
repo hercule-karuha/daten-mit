@@ -9,7 +9,8 @@ import FFT::*;
 import FIRFilter::*;
 import Splitter::*;
 import FilterCoefficients::*;
-import Cordic::*;
+import FromMP::*;
+import ToMP::*;
 import PitchAdjust::*;
 
 module mkAudioPipeline(AudioProcessor);
