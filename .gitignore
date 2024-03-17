@@ -1,3 +1,5 @@
 reference/
 **/buildDir
 sim*
+**/connectal
+**/ply-3.9
