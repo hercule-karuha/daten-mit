@@ -12,8 +12,6 @@ BSVPATH += / \
 CPPFILES += \
 	main.cpp
 
-USE_BUILDCACHE=1
-
 #CONNECTALFLAGS += --mainclockperiod=20
 #CONNECTALFLAGS += --verilog=ddr3_v2_0/
 SOFTWARE_SOCKET_NAME=/tmp/connectal$(USER)
@@ -29,8 +27,3 @@ include $(CONNECTALDIR)/Makefile.connectal
 clean:
 	rm -rf bluesim
 
-
-simple_compile:
-	mkdir -p buildDir
-	bsc -u -sim -bdir buildDir -info-dir buildDir -simdir buildDir -vdir buildDir -p +:src/includes/ -aggressive-conditions -keep-fires src/TwoStageBTB.bsv
-	

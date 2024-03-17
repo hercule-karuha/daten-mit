@@ -27,6 +27,7 @@ endinterface
 
 module [Module] mkConnectalWrapper#(ConnectalProcIndication ind)(ConnectalWrapper);
    Proc m <- mkProc();
+   //Proc2 m <- mkProc();
 
    rule relayMessage;
 	let mess <- m.cpuToHost();
@@ -36,7 +37,7 @@ module [Module] mkConnectalWrapper#(ConnectalProcIndication ind)(ConnectalWrappe
       method Action hostToCpu(Bit#(32) startpc);
         $display("Received software req to start pc\n");
         $fflush(stdout);
-	m.hostToCpu(unpack(startpc));
+        m.hostToCpu(unpack(startpc));
       endmethod
    endinterface
 endmodule
