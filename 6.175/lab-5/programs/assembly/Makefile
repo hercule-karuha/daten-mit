@@ -15,7 +15,6 @@ default: all
 # Sources
 #--------------------------------------------------------------------
 rv32ui_tests = \
-	simple \
 	add addi \
 	and andi \
 	auipc \
@@ -38,13 +37,12 @@ rv32ui_tests = \
 # Build rules
 #--------------------------------------------------------------------
 
-#RISCV_TOOL_DIR = /bsc-work/riscv32-unknown-elf/bin
 RISCV_TOOL_DIR = /opt/riscv/bin
 RISCV_PREFIX = $(RISCV_TOOL_DIR)/riscv32-unknown-elf
 # gcc
 RISCV_GCC = $(RISCV_PREFIX)-gcc
-# RISCV_GCC_OPTS =  -m32 -static -fvisibility=hidden -nostdlib -nostartfiles -Wa,-march=RVI
-RISCV_GCC_OPTS = -static -fvisibility=hidden -nostdlib -nostartfiles -Wa,-march=rv32i_zicsr -mabi=ilp32
+#RISCV_GCC_OPTS =  -m32 -static -fvisibility=hidden -nostdlib -nostartfiles -Wa,-march=RVI
+RISCV_GCC_OPTS = -static -fvisibility=hidden -nostdlib -nostartfiles -Wa,-march=rv32i -mabi=ilp32
 
 incs := -I$(asmdir)/../env -I$(asmdir)/macros
 # link
@@ -52,9 +50,8 @@ RISCV_LINK_OPTS = -T$(asmdir)/link.ld
 # objdump
 RISCV_OBJDUMP = $(RISCV_PREFIX)-objdump --disassemble --disassemble-zeroes --section=.text --section=.text.startup --section=.data
 # convert to VMH: 64KB memory
-#ELF2HEX_TOOL_DIR = /bsc-work/riscv-fesvr/build
-#RISCV_ELF2HEX = $(ELF2HEX_TOOL_DIR)/elf2hex
-RISCV_ELF2HEX = $(RISCV_TOOL_DIR)/bin/elf2hex
+ELF2HEX_TOOL_DIR = /opt/riscv/bin
+RISCV_ELF2HEX = $(ELF2HEX_TOOL_DIR)/elf2hex
 VMH_WIDTH = 8
 VMH_DEPTH = 65536
 
@@ -77,8 +74,8 @@ $(rv32ui_tests_bin): %.riscv: %.S
 $(rv32ui_tests_vmh): %.riscv.vmh: %.riscv
 	@echo $(basename $<)
 	@echo "@0" > $(asm_build_vmh_dir)/temp
-	$(RISCV_ELF2HEX) $(VMH_WIDTH) $(VMH_DEPTH) $(asm_build_bin_dir)/$< >> $(asm_build_vmh_dir)/temp
-	# $(RISCV_ELF2HEX) --bit-width $(VMH_WIDTH) --input $< >> $(asm_build_vmh_dir)/temp
+	# $(RISCV_ELF2HEX) $(VMH_WIDTH) $(VMH_DEPTH) $(asm_build_bin_dir)/$< >> $(asm_build_vmh_dir)/temp
+	$(RISCV_ELF2HEX) --bit-width $(VMH_WIDTH) --input $< >> $(asm_build_vmh_dir)/temp
 	$(asmdir)/../trans_vmh.py $(asm_build_vmh_dir)/temp $(asm_build_vmh_dir)/$@
 
 
