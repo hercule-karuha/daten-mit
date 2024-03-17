@@ -4,3 +4,9 @@ sim*
 **/connectal
 **/ply-3.9
 **/bluesim
+**/connectal/
+**/*.riscv
+**/*.riscv.dump
+**/*.riscv.vmh
+**/*.o
+temp
