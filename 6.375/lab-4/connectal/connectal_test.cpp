@@ -1,7 +1,10 @@
+#include <cstdlib>
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/stat.h>
 #include <pthread.h>
+#include <stdlib.h>
+#include <math.h>
 
 #include "MyDutRequest.h"
 #include "MyDutIndication.h"
@@ -113,8 +116,16 @@ int main (int argc, const char **argv)
     // Open a channel to FPGA to issue requests
     device = new MyDutRequestProxy(IfcNames_MyDutRequestS2H);
 
+    double pf = atof(argv[1]); // holding pitch factor
+    uint16_t m_i = (uint16_t)floor(pf);
+    uint16_t m_f = (uint16_t)( pow(2, 16) * (pf - floor(pf)) );
+    // 32-bit unsigned integer that can be used by software
+    uint32_t factorPkt = (uint32_t)(m_i << 16) | m_f;
+
     // Invoke reset_dut method of HW request ifc (Soft-reset)
     device->reset_dut();
+
+    device->setFactor(factorPkt); // invoke HW method
 
     // Run the testbench: send in.cpm
     run_test_bench();

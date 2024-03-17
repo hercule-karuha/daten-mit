@@ -15,6 +15,7 @@ interface MyDutRequest;
     // Bit#(n) is the only supported argument type for request methods
     method Action putSampleInput (Bit#(16) in);
     method Action reset_dut();
+    method Action setFactor (Bit#(32) factorPkt);
 endinterface
 
 // interface used by hardware to send a message back to software
@@ -46,7 +47,7 @@ module mkMyDut#(MyDutIndication indication) (MyDut);
     // Send a message back to sofware whenever the response is ready
     rule indicationToSoftware;
         let d <- ap.getSampleOutput;
-        // $display("out: %d", d);
+        $display("out: %d", d);
         indication.returnOutput(pack(d)); // pack casts the "type" of non-Bit#(n) variable into Bit#(n). Physical bits do not change. Just type conversion.
     endrule
 
@@ -54,7 +55,7 @@ module mkMyDut#(MyDutIndication indication) (MyDut);
     // Interface used by software (MyDutRequest)
     interface MyDutRequest request;
         method Action putSampleInput (Bit#(16) in) if (!isResetting);
-            // $display("in: %d %d", in, cnt);
+            $display("in: %d %d", in, cnt);
             cnt <= cnt + 1;
             ap.putSampleInput(unpack(in)); // unpack casts the type of a Bit#(n) value into a different type, i.e., Sample, which is Int#(16)
         endmethod
@@ -63,5 +64,10 @@ module mkMyDut#(MyDutIndication indication) (MyDut);
             my_rst.assertReset; // assert my_rst.new_rst signal
             isResetting <= True;
         endmethod
+
+        method Action setFactor (Bit#(32) factorPkt) if (!isResetting);
+            ap.setFactor(unpack(factorPkt));
+        endmethod
     endinterface
+
 endmodule

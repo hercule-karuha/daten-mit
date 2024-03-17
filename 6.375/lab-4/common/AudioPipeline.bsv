@@ -38,7 +38,7 @@ module mkAudioPipeline(AudioProcessor);
     ToMP#(N, ISIZE, FSIZE, PSIZE) tomp <- mkToMP();
 
     FixedPoint#(isize, fsize) factor = fromInteger(valueOf(FACTOR));
-    PitchAdjust#(N, ISIZE, FSIZE, PSIZE) pitch_adjust <- mkPitchAdjust(valueOf(S), factor);
+    SettablePitchAdjust#(N, ISIZE, FSIZE, PSIZE) pitch_adjust <- mkPitchAdjust(valueOf(S));
 
     FromMP#(N, ISIZE, FSIZE, PSIZE) frommp <- mkFromMP();
 
@@ -70,11 +70,11 @@ module mkAudioPipeline(AudioProcessor);
 
     rule tomp_to_pitchadjust (True);
         let x <- tomp.response.get();
-        pitch_adjust.request.put(x);
+        pitch_adjust.adjust.request.put(x);
     endrule
 
     rule pitchadjust_to_frommp (True);
-        let x <- pitch_adjust.response.get();
+        let x <- pitch_adjust.adjust.response.get();
         frommp.request.put(x);
     endrule
 
@@ -102,5 +102,8 @@ module mkAudioPipeline(AudioProcessor);
         return x;
     endmethod
 
+    method Action setFactor(FixedPoint#(16, 16) x);
+        pitch_adjust.setFactor.put(x);
+    endmethod        
 endmodule
 
