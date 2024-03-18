@@ -44,7 +44,7 @@ RISCV_PREFIX = $(RISCV_TOOL_DIR)/riscv32-unknown-elf
 # gcc
 RISCV_GCC = $(RISCV_PREFIX)-gcc
 # RISCV_GCC_OPTS =  -m32 -static -fvisibility=hidden -nostdlib -nostartfiles -Wa,-march=RVI
-RISCV_GCC_OPTS = -static -fvisibility=hidden -nostdlib -nostartfiles -Wa,-march=rv32i_zicsr -mabi=ilp32
+RISCV_GCC_OPTS = -static -fvisibility=hidden -nostdlib -nostartfiles -W -march=rv32i_zicsr -mabi=ilp32
 
 incs := -I$(asmdir)/../env -I$(asmdir)/macros
 # link
