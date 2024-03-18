@@ -18,6 +18,4 @@ with open(out_file, 'w') as fout:
         val = lines[i][:-1].rstrip('\n');
         fout.write(val[8:] + '\n');
         fout.write(val[:8] + '\n');
-
-~                                                                                                                                                                                                                                                                                                 
-~                                                                  
+                                                             

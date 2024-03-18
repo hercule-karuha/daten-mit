@@ -10,3 +10,4 @@ sim*
 **/*.riscv.vmh
 **/*.o
 temp
+**/logs/
