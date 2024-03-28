@@ -1,0 +1,37 @@
+Discussion Question 1 (5 Points): What is the IPC for the two-stage pipelined processor 
+for each benchmark tested by the run_bmarks.sh script?
+
+OUTPUT:
+
+Benchmark median
+Cycles = 11016
+Insts  = 4243
+IPC = 0.385
+
+Benchmark multiply
+Cycles = 60129
+Insts  = 20893
+IPC = 0.347
+
+Benchmark qsort
+Cycles = 314313
+Insts  = 123496
+IPC = 0.392
+
+Benchmark tower
+Cycles = 8078
+Insts  = 3743
+IPC = 0.463
+
+Benchmark vvadd
+Cycles = 5711
+Insts  = 2408
+IPC = 0.421
+
+Discussion Question 2 (5 Points): What is the formula to compute the next address predictor accuracy from the IPC? 
+(Hint, how many cycles does it take to execute an instruction when the PC+4 prediction is correct? 
+What about when it is incorrect?) 
+Using this formula, what is the accuracy of the PC+4 next address predictor for each benchmark?
+
+formula: predictor_accuracy = (2 * ipc -1) / ipc
+

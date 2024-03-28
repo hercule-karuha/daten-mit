@@ -48,7 +48,7 @@ module mkProc(Proc);
         dMem.init.request.put(e);
     endrule
     
-    rule doFetch;
+    rule doFetch(csrf.started);
         let inst = iMem.req(pc);
         if (execRedirect.notEmpty) begin
             fEpoch <= !fEpoch; 
@@ -56,13 +56,13 @@ module mkProc(Proc);
             execRedirect.deq;
         end
         else begin
-            let ppc = pc + 4;
+            let ppc = nextAddrPredictor(pc);
             pc <= ppc;
             f2d.enq(Fetch2Execute{pc:pc, ppc:ppc, inst:inst, epoch:fEpoch});
         end
     endrule
 
-    rule doExecute;
+    rule doExecute(csrf.started);
         let x = f2d.first;
         if (x.epoch == eEpoch) begin
             let dInst = decode(x.inst);
@@ -73,7 +73,7 @@ module mkProc(Proc);
             ExecInst eInst = exec(dInst, rVal1, rVal2, x.pc, x.ppc, csrVal);
 
             if (eInst.mispredict) begin
-                execRedirect.enq (eInst.addr);
+                execRedirect.enq(eInst.addr);
                 eEpoch <= !eEpoch;
             end
 
