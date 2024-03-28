@@ -27,17 +27,17 @@ typedef struct{
 function Addr nextAddrPredictor(Addr pc);
     return pc + 4;
 endfunction
-
+ 
 (*synthesize*)
 module mkProc(Proc);
     Reg#(Addr) pc <- mkRegU;
-    RFile      rf <- mkRFile;
+    RFile     rf <- mkRFile;
     IMemory  iMem <- mkIMemory;
     DMemory  dMem <- mkDMemory;
     CsrFile  csrf <- mkCsrFile;
 
-    FIFOF#(Fetch2Execute) f2d <- mkFIFOF;
-    FIFOF#(Addr) execRedirect <- mkFIFOF;
+    FIFOF#(Fetch2Execute) f2d <- mkSizedFIFOF(3);
+    FIFOF#(Addr) execRedirect <- mkSizedFIFOF(3);
     Reg#(Bool) fEpoch <- mkReg(False);
     Reg#(Bool) eEpoch <- mkReg(False);
 
@@ -48,6 +48,7 @@ module mkProc(Proc);
         dMem.init.request.put(e);
     endrule
     
+
     rule doFetch(csrf.started);
         let inst = iMem.req(pc);
         if (execRedirect.notEmpty) begin
@@ -61,7 +62,7 @@ module mkProc(Proc);
             f2d.enq(Fetch2Execute{pc:pc, ppc:ppc, inst:inst, epoch:fEpoch});
         end
     endrule
-
+    
     rule doExecute(csrf.started);
         let x = f2d.first;
         if (x.epoch == eEpoch) begin
@@ -83,11 +84,11 @@ module mkProc(Proc);
                 let d <- dMem.req(MemReq{op: St, addr: eInst.addr, data: eInst.data});
             end
 
-            $display("pc: %h inst: (%h) expanded: ", pc, x.inst, showInst(x.inst));
+            $display("pc: %h inst: (%h) expanded: ", x.pc, x.inst, showInst(x.inst));
             $fflush(stdout);
 
             if(eInst.iType == Unsupported) begin
-                $fwrite(stderr, "ERROR: Executing unsupported instruction at pc: %x. Exiting\n", pc);
+                $fwrite(stderr, "ERROR: Executing unsupported instruction at pc: %x. Exiting\n", x.pc);
                 $finish;
             end
 
