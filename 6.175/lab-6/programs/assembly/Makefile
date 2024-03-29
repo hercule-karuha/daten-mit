@@ -42,7 +42,7 @@ RISCV_PREFIX = $(RISCV_TOOL_DIR)/riscv32-unknown-elf
 # gcc
 RISCV_GCC = $(RISCV_PREFIX)-gcc
 #RISCV_GCC_OPTS =  -m32 -static -fvisibility=hidden -nostdlib -nostartfiles -Wa,-march=RVI
-RISCV_GCC_OPTS = -static -fvisibility=hidden -nostdlib -nostartfiles -Wa,-march=rv32i -mabi=ilp32
+RISCV_GCC_OPTS = -static -fvisibility=hidden -nostdlib -nostartfiles -W -march=rv32i_zicsr -mabi=ilp32
 
 incs := -I$(asmdir)/../env -I$(asmdir)/macros
 # link
@@ -74,8 +74,8 @@ $(rv32ui_tests_bin): %.riscv: %.S
 $(rv32ui_tests_vmh): %.riscv.vmh: %.riscv
 	@echo $(basename $<)
 	@echo "@0" > $(asm_build_vmh_dir)/temp
-	# $(RISCV_ELF2HEX) $(VMH_WIDTH) $(VMH_DEPTH) $(asm_build_bin_dir)/$< >> $(asm_build_vmh_dir)/temp
-	$(RISCV_ELF2HEX) --bit-width $(VMH_WIDTH) --input $< >> $(asm_build_vmh_dir)/temp
+	$(RISCV_ELF2HEX) $(VMH_WIDTH) $(VMH_DEPTH) $(asm_build_bin_dir)/$< >> $(asm_build_vmh_dir)/temp
+#	$(RISCV_ELF2HEX) --bit-width $(VMH_WIDTH) --input $< >> $(asm_build_vmh_dir)/temp
 	$(asmdir)/../trans_vmh.py $(asm_build_vmh_dir)/temp $(asm_build_vmh_dir)/$@
 
 
