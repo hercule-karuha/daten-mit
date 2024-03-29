@@ -1,6 +1,7 @@
-Discussion Question 1 (5 Points): What is the IPC for the two-stage pipelined processor 
-for each benchmark tested by the run_bmarks.sh script?
-
+--------------------------------------------------------------------------------
+Discussion Question 1 (5 Points): What is the IPC for the two-stage 
+pipelined processor for each benchmark tested by the run_bmarks.sh script?
+--------------------------------------------------------------------------------
 OUTPUT:
 Benchmark median
 Cycles = 5930
@@ -27,10 +28,13 @@ Cycles = 3005
 Insts  = 2408
 IPC = 0.8013
 
-Discussion Question 2 (5 Points): What is the formula to compute the next address predictor accuracy from the IPC? 
+--------------------------------------------------------------------------------
+Discussion Question 2 (5 Points): What is the formula to compute the next 
+address predictor accuracy from the IPC? 
 (Hint, how many cycles does it take to execute an instruction when the PC+4 prediction is correct? 
 What about when it is incorrect?) 
 Using this formula, what is the accuracy of the PC+4 next address predictor for each benchmark?
+--------------------------------------------------------------------------------
 
 formula: predictor_accuracy = (2 * ipc -1) / ipc
 
@@ -48,3 +52,57 @@ Benchmark tower
 
 Benchmark vvadd
 0.7520
+
+
+--------------------------------------------------------------------------------
+Discussion Question 3 (5 Points): What is the IPC for the two-stage pipelined 
+processor with a BTB for each benchmark tested by the run_bmarks.sh script? 
+How much has it improved over the previous version?
+--------------------------------------------------------------------------------
+Benchmark median
+Cycles = 5504
+Insts  = 4243
+IPC = 0.7708
+
+Benchmark multiply
+Cycles = 22070
+Insts  = 20893
+IPC = 0.9466
+
+Benchmark qsort
+Cycles = 155349
+Insts  = 123496
+IPC = 0.7949
+
+Benchmark tower
+Cycles = 3936
+Insts  = 3743
+IPC = 0.9509
+
+Benchmark vvadd
+Cycles = 2411
+Insts  = 2408
+IPC = 0.9987
+
+improved a lot of
+
+
+--------------------------------------------------------------------------------
+Discussion Question 4 (5 Points): How does adding the BTB change the performance 
+of the bpred_* microbenchmarks? 
+(Hint: the number of cycles for bpred_j should go down.)
+--------------------------------------------------------------------------------
+BTB :
+-- assembly test: bpred_bht --
+1612
+1010
+PASSED
+-- assembly test: bpred_j --
+1844
+1806
+PASSED
+-- assembly test: bpred_ras --
+436
+286
+PASSED
+
