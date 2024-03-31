@@ -15,6 +15,7 @@ default: all
 # Sources
 #--------------------------------------------------------------------
 rv32ui_tests = \
+	simple	 \
 	add addi \
 	and andi \
 	auipc \
