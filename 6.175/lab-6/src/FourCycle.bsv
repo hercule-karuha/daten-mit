@@ -5,93 +5,99 @@
 import Types::*;
 import ProcTypes::*;
 import CMemTypes::*;
-import MemInit::*;
 import RFile::*;
+import IMemory::*;
+import DMemory::*;
 import DelayedMemory::*;
 import Decode::*;
 import Exec::*;
 import CsrFile::*;
 import Vector::*;
-import FIFO::*;
+import MyFifo::*;
 import Ehr::*;
 import GetPut::*;
 
-typedef enum {
-    Fetch,
-    Decode,
-    Execute,
-    Writeback
-} State deriving(Bits, Eq, FShow);
+typedef enum {Fetch, Decode, Execute, WriteBack} State deriving (Bits, Eq);
 
-(*synthesize*)
-module mkProc(Proc);
-    Reg#(Addr) pc <- mkRegU;
-    RFile      rf <- mkRFile;
-    DelayedMemory iMem <- mkDelayedMemory;
-    DelayedMemory dMem <- mkDelayedMemory;
-    CsrFile  csrf <- mkCsrFile;
-    
-    Reg#(State) stage <- mkReg(Fetch);
-    Reg#(DecodedInst) decodedInst <- mkRegU;
-    Reg#(ExecInst)       execInst <- mkRegU; 
+(* synthesize *)
+module mkProc(Proc2);
+    Reg#(Addr) pc     <- mkRegU;
+    RFile      rf     <- mkRFile;
+    CsrFile  csrf     <- mkCsrFile;
+    DelayedMemory mem <- mkDelayedMemory;
 
-    Bool memReady = iMem.init.done() && dMem.init.done();
+    Reg#(State)        state   <- mkReg(Fetch); 
+    //Reg#(MemResp)      f2d     <- mkRegU      ; 
+    Reg#(DecodedInst)  dInst     <- mkRegU      ; 
+    Reg#(ExecInst)     eInst     <- mkRegU      ; 
+
+    Bool memReady = mem.init.done();
+
     rule test (!memReady);
         let e = tagged InitDone;
-        iMem.init.request.put(e);
-        dMem.init.request.put(e);
+        mem.init.request.put(e);
     endrule
 
-    rule doFetch if (csrf.started && stage == Fetch);
-        iMem.req(MemReq{ op: Ld, addr: pc, data: ? });
-        stage <= Decode;
+    rule doFetch(state == Fetch && csrf.started);
+        state   <= Decode;
+
+        mem.req(MemReq{op: Ld, addr: pc, data: ?});      //fetch 
     endrule
 
-    rule doDecode if (csrf.started && stage == Decode);
-        let inst <- iMem.resp;
-        decodedInst <= decode(inst);
-        stage <= Execute;
+    rule doDecode(state == Decode && csrf.started);
+        state    <= Execute;
+
+        let inst <- mem.resp;
+        dInst <= decode(inst);
+        // trace - print the instruction
+        $display("pc: %h inst: (%h) expanded: ", pc, inst, showInst(inst));
+        $fflush(stdout);
     endrule
 
-    rule doExecute if (csrf.started && stage == Execute);
-        let dInst = decodedInst;
-        let rVal1 = rf.rd1(fromMaybe(?, dInst.src1));
-        let rVal2 = rf.rd2(fromMaybe(?, dInst.src2));
-        let csrVal = csrf.rd(fromMaybe(?, dInst.csr));
-        
-        let eInst = exec(dInst, rVal1, rVal2, pc, ?, csrVal);
+    rule doExecute(state == Execute && csrf.started);
+        state    <= WriteBack;
 
-        if (eInst.iType == Unsupported) begin
-            $fwrite(stderr, "ERROR: Executing unsupported instruction at pc: %x. Exiting!\n", pc);
+        // read general purpose register values 
+        Data rVal1 = rf.rd1(fromMaybe(?, dInst.src1));
+        Data rVal2 = rf.rd2(fromMaybe(?, dInst.src2));
+
+        // read CSR values (for CSRR inst)
+        Data csrVal = csrf.rd(fromMaybe(?, dInst.csr));
+
+        // execute
+        ExecInst eInstTemp = exec(dInst, rVal1, rVal2, pc, ?, csrVal);
+        // memory
+        if(eInstTemp.iType == Ld) begin
+             mem.req(MemReq{op: Ld, addr: eInstTemp.addr, data: ?});
+        end else if(eInstTemp.iType == St) begin
+            mem.req(MemReq{op: St, addr: eInstTemp.addr, data: eInstTemp.data});
+        end
+        eInst <= eInstTemp;  
+    endrule
+    
+    rule doWriteBack(state == WriteBack && csrf.started);
+        state    <= Fetch;
+        // check unsupported instruction at commit time. Exiting
+        if(eInst.iType == Unsupported) begin
+            $fwrite(stderr, "ERROR: Executing unsupported instruction at pc: %x. Exiting\n", pc);
             $finish;
         end
-        
-        if (eInst.iType == Ld) begin
-            dMem.req(MemReq{ op: Ld, addr: eInst.addr, data: ? });
-        end
-        else if (eInst.iType == St) begin
-            dMem.req(MemReq{ op: St, addr: eInst.addr, data: eInst.data});
-        end
 
-        pc <= eInst.brTaken ? eInst.addr : (pc + 4);
-        execInst <= eInst;
-        stage <= Writeback;
-    endrule
+        let eInstTemp = eInst;
+        if(eInstTemp.iType == Ld) begin
+             eInstTemp.data <- mem.resp;
+        end 
 
-    rule doWriteback if (csrf.started && stage == Writeback);
-        let eInst = execInst;
-
-        if (eInst.iType == Ld) begin
-            eInst.data <- dMem.resp;
-        end
-        
-        if (isValid(eInst.dst)) begin
-            rf.wr(fromMaybe(?, eInst.dst), eInst.data);
+        // write back to reg file
+        if(isValid(eInstTemp.dst)) begin
+            rf.wr(fromMaybe(?, eInstTemp.dst), eInstTemp.data);
         end
 
-        stage <= Fetch;
-        
-        csrf.wr(eInst.iType == Csrw ? eInst.csr : Invalid, eInst.data);
+        // update the pc depending on whether the branch is taken or not
+        pc <= eInstTemp.brTaken ? eInstTemp.addr : pc + 4;
+
+        // CSR write for sending data to host & stats
+        csrf.wr(eInstTemp.iType == Csrw ? eInstTemp.csr : Invalid, eInstTemp.data);
     endrule
 
     method ActionValue#(CpuToHostData) cpuToHost;
@@ -99,14 +105,17 @@ module mkProc(Proc);
         return ret;
     endmethod
 
-    method Action hostToCpu(Bit#(32) startpc) if (!csrf.started && memReady);
-        csrf.start(0);
-        $display("Start at pc %h\n", startpc);
+    method Action hostToCpu(Bit#(32) startpc) if ( !csrf.started && memReady );
+        csrf.start(0); // only 1 core, id = 0
+        $display("Start at pc 200\n");
         $fflush(stdout);
         pc <= startpc;
     endmethod
 
-    interface iMemInit = iMem.init;
-    interface dMemInit = dMem.init;
+    interface dMemInit = mem.init;
 
+endmodule
+(* synthesize *)
+module mkTb();
+    Proc2 proc_inst <-mkProc();
 endmodule
