@@ -11,3 +11,5 @@ sim*
 **/*.o
 temp
 **/logs/
+SWSOCK*
+*log*
