@@ -1,5 +1,3 @@
-// Two stage
-
 import Types::*;
 import ProcTypes::*;
 import CMemTypes::*;

@@ -15,7 +15,7 @@ import Types::*;
 import ProcTypes::*;
 import Ehr::*;
 import ConfigReg::*;
-import MyFifo::*;
+import Fifo::*;
 
 interface CsrFile;
     method Action start(Data id);

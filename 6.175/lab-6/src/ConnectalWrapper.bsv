@@ -1,34 +1,32 @@
 import ProcTypes::*;
 
 
-`ifdef FOURCYCLE 
-import FourCycle::*;
-`endif
-
 `ifdef TWOSTAGE
 import TwoStage::*;
 `endif
-`ifdef SIXSTAGE 
+`ifdef TWOSTAGEBTB
+import TwoStageBTB::*;
+`endif
+`ifdef SIXSTAGE
 import SixStage::*;
 `endif
-`ifdef SIXSTAGEBHT
+`ifdef SIXSTAGEBHT 
 import SixStageBHT::*;
 `endif
 `ifdef SIXSTAGEBONUS
 import SixStageBonus::*;
+`endif
+`ifdef SIXSTAGERAS
+import SixStageRAS::*;
 `endif
 
 import Ifc::*;
 import ProcTypes::*;
 import Types::*;
 import Ehr::*;
-import CMemTypes::*;
-//import MemTypes::*;
-import GetPut::*;
 
 interface ConnectalWrapper;
    interface ConnectalProcRequest connectProc;
-  interface ConnectalMemoryInitialization initProc;
 endinterface
 
 module [Module] mkConnectalWrapper#(ConnectalProcIndication ind)(ConnectalWrapper);
@@ -45,18 +43,4 @@ module [Module] mkConnectalWrapper#(ConnectalProcIndication ind)(ConnectalWrappe
 	m.hostToCpu(unpack(startpc));
       endmethod
    endinterface
-  interface ConnectalMemoryInitialization initProc;
-	method Action done();
-		$display("Done memory initialization");
-		m.iMemInit.request.put(tagged InitDone);
-		m.dMemInit.request.put(tagged InitDone);
-	endmethod
-
-	method Action request(Bit#(32) addr, Bit#(32) data);
-		$display("Request %x %x",addr, data);
-		ind.wroteWord(0);
-		m.iMemInit.request.put(tagged InitLoad (MemInitLoad {addr: addr, data: data}));
-		m.dMemInit.request.put(tagged InitLoad (MemInitLoad {addr: addr, data: data}));
-	endmethod 
-  endinterface
 endmodule
