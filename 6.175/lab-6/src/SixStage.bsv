@@ -17,12 +17,14 @@ import Scoreboard::*;
 typedef struct {
     Addr pc;
     Addr predPc;
+	Bool epoch;
 } IF2D deriving (Bits, Eq);
 
 typedef struct {
     Addr pc;
     Addr predPc;
     DecodedInst dInst;
+	Bool epoch;
 } D2RF deriving (Bits, Eq);
 
 typedef struct {
@@ -44,21 +46,21 @@ typedef struct {
 module mkProc(Proc);
     Ehr#(2, Addr) pcReg <- mkEhr(?);
     RFile            rf <- mkRFile;
-	Scoreboard#(2)   sb <- mkCFScoreboard;
+	Scoreboard#(6)   sb <- mkCFScoreboard;
 	FPGAMemory        iMem <- mkFPGAMemory;
     FPGAMemory        dMem <- mkFPGAMemory;
     CsrFile        csrf <- mkCsrFile;
-    Btb#(6)         btb <- mkBtb; // 64-entry BTB
+    Btb#(8)         btb <- mkBtb; // 64-entry BTB
 
 	Reg#(Bool) exeEpoch <- mkReg(False);
 
 	Ehr#(2, Maybe#(ExeRedirect)) exeRedirect <- mkEhr(Invalid);
 
-	Fifo#(2, IF2D) if2dFifo <- mkCFFifo;
-	Fifo#(2, D2RF) d2rfFifo <- mkCFFifo;
-	Fifo#(2, RF2E) rf2eFifo <- mkCFFifo;
-	Fifo#(2, ExecInst) e2mFifo <- mkCFFifo;
-	Fifo#(2, ExecInst) m2wbFifo <- mkCFFifo;
+	Fifo#(6, IF2D) if2dFifo <- mkCFFifo;
+	Fifo#(6, D2RF) d2rfFifo <- mkCFFifo;
+	Fifo#(6, RF2E) rf2eFifo <- mkCFFifo;
+	Fifo#(6, ExecInst) e2mFifo <- mkCFFifo;
+	Fifo#(6, ExecInst) m2wbFifo <- mkCFFifo;
 
     Bool memReady = iMem.init.done && dMem.init.done;
     rule test (!memReady);
@@ -71,37 +73,43 @@ module mkProc(Proc);
 		iMem.req(MemReq{op: Ld, addr: pcReg[0], data: ?});
 		Addr predPc = btb.predPc(pcReg[0]);
 		pcReg[0] <= predPc;
-		if2dFifo.enq(IF2D{pc: pcReg[0], predPc: predPc});
+		if2dFifo.enq(IF2D{pc: pcReg[0], predPc: predPc, epoch: exeEpoch});
+
+		$display("InstructionFetch: PC = %x", pcReg[0]);
 	endrule
 
 	rule doDecode(csrf.started);
 		IF2D if2d = if2dFifo.first;
 		Data inst <- iMem.resp;
 		DecodedInst dInst = decode(inst);
+		if2dFifo.deq;	
+		d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: if2d.predPc, dInst: dInst, epoch: if2d.epoch});
 
-		if(!sb.search1(dInst.src1) && !sb.search2(dInst.src2)) begin
-			// enq & update PC, sb
-			if2dFifo.deq;	
-			d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: if2d.predPc, dInst: dInst});
-			sb.insert(dInst.dst);
-			$display("Fetch: PC = %x, inst = %x, expanded = ", pcReg[0], inst, showInst(inst));
-		end
-		else begin
-			$display("Fetch Stalled: PC = %x", pcReg[0]);
-		end
+		$display("Decode: PC = %x, inst = %x, expanded = ", if2d.pc, inst, showInst(inst));
 	endrule
 
 	rule doRegisterFetch(csrf.started);
 		D2RF d2rf = d2rfFifo.first;
-		d2rfFifo.deq;
+
 		DecodedInst dInst = d2rf.dInst;
 
-		Data rVal1 = rf.rd1(fromMaybe(?, dInst.src1));
-		Data rVal2 = rf.rd2(fromMaybe(?, dInst.src2));
-		Data csrVal = csrf.rd(fromMaybe(?, dInst.csr));
+		if(!sb.search1(dInst.src1) && !sb.search2(dInst.src2)) begin
+			// enq & update PC, sb
+			d2rfFifo.deq;
+			sb.insert(dInst.dst);
+			
+			Data rVal1 = rf.rd1(fromMaybe(?, dInst.src1));
+			Data rVal2 = rf.rd2(fromMaybe(?, dInst.src2));
+			Data csrVal = csrf.rd(fromMaybe(?, dInst.csr));
 
-		rf2eFifo.enq(RF2E{pc: d2rf.pc, predPc: d2rf.predPc, dInst: d2rf.dInst, 
-		rVal1: rVal1, rVal2: rVal2, csrVal: csrVal, epoch: exeEpoch});
+			rf2eFifo.enq(RF2E{pc: d2rf.pc, predPc: d2rf.predPc, dInst: d2rf.dInst, 
+			rVal1: rVal1, rVal2: rVal2, csrVal: csrVal, epoch: d2rf.epoch});
+
+			$display("RegisterFetch: PC = %x", d2rf.pc);
+		end
+		else begin
+			$display("RegisterFetch Stalled: PC = %x", pcReg[0]);
+		end
 	endrule
 
 	rule doExecute(csrf.started);

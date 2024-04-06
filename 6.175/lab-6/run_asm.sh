@@ -31,18 +31,16 @@ mkdir -p ${log_dir}
 # kill previous bsim if any
 pkill bluetcl
 
-echo "Assembly Test" > log
-
 # run each test
 for test_name in ${asm_tests[@]}; do
-	echo "-- assembly test: ${test_name} --" >> log
+	echo "-- assembly test: ${test_name} --" >> ./logs/alog
 	# copy vmh file
 	mem_file=${vmh_dir}/${test_name}.riscv.vmh
 	if [ ! -f $mem_file ]; then
 		echo "ERROR: $mem_file does not exit, you need to first compile"
 		exit
 	fi
-	cp ${mem_file} ./mem.vmh 
+	cp ${mem_file} bluesim/mem.vmh 
 
 	# run test
 	# make run.bluesim 1> ${log_dir}/${test_name}.log # run bsim, redirect outputs to log
