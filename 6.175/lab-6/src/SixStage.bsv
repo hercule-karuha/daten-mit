@@ -72,8 +72,8 @@ module mkProc(Proc);
 	rule doInstructionFetch(csrf.started);
 		iMem.req(MemReq{op: Ld, addr: pcReg[0], data: ?});
 		Addr predPc = btb.predPc(pcReg[0]);
-		pcReg[0] <= predPc;
 		if2dFifo.enq(IF2D{pc: pcReg[0], predPc: predPc, epoch: exeEpoch});
+		pcReg[0] <= predPc;
 
 		$display("InstructionFetch: PC = %x", pcReg[0]);
 	endrule
@@ -94,7 +94,6 @@ module mkProc(Proc);
 		DecodedInst dInst = d2rf.dInst;
 
 		if(!sb.search1(dInst.src1) && !sb.search2(dInst.src2)) begin
-			// enq & update PC, sb
 			d2rfFifo.deq;
 			sb.insert(dInst.dst);
 			
@@ -108,7 +107,7 @@ module mkProc(Proc);
 			$display("RegisterFetch: PC = %x", d2rf.pc);
 		end
 		else begin
-			$display("RegisterFetch Stalled: PC = %x", pcReg[0]);
+			$display("RegisterFetch Stalled: PC = %x", d2rf.pc);
 		end
 	endrule
 
@@ -117,8 +116,9 @@ module mkProc(Proc);
 		rf2eFifo.deq;
 
 		if(rf2e.epoch != exeEpoch) begin
-			sb.remove;
-			$display("Execute: Kill instruction");
+			$display("Execute: Kill instruction: PC = %x", rf2e.pc);
+			e2mFifo.enq(ExecInst{iType: Alu, dst:Invalid, csr:Invalid, data: ?,
+			 addr: ?, mispredict:False, brTaken:False});
 		end
 		else begin
 			ExecInst eInst = exec(rf2e.dInst, rf2e.rVal1, rf2e.rVal2, rf2e.pc, 
@@ -161,7 +161,7 @@ module mkProc(Proc);
 		if(eInst.iType == Ld) begin
 			Data dmres <- dMem.resp;
 			if(isValid(eInst.dst)) begin
-				rf.wr(fromMaybe(?, eInst.dst), eInst.data);
+				rf.wr(fromMaybe(?, eInst.dst), dmres);
 			end
 			csrf.wr(eInst.iType == Csrw ? eInst.csr : Invalid, dmres);
 			sb.remove;
