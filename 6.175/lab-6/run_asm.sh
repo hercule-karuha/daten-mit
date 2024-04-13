@@ -31,9 +31,12 @@ mkdir -p ${log_dir}
 # kill previous bsim if any
 pkill bluetcl
 
+echo "Assembly Test" > log
+
 # run each test
 for test_name in ${asm_tests[@]}; do
-	echo "-- assembly test: ${test_name} --" >>log
+	echo "-- assembly test: ${test_name} --" >> log
+	echo "-- assembly test: ${test_name} --"
 	# copy vmh file
 	mem_file=${vmh_dir}/${test_name}.riscv.vmh
 	if [ ! -f $mem_file ]; then
@@ -43,8 +46,8 @@ for test_name in ${asm_tests[@]}; do
 	cp ${mem_file} ./mem.vmh 
 
 	# run test
-	# make run.bluesim 1> ${log_dir}/${test_name}.log 2>>log # run bsim, redirect outputs to log
-	bluesim/bin/ubuntu.exe 1> ${log_dir}/${test_name}.log 2>>log
+	# make run.bluesim 1> ${log_dir}/${test_name}.log # run bsim, redirect outputs to log
+	bluesim/bin/ubuntu.exe 1> ${log_dir}/${test_name}.log
 	sleep ${wait_time}
 	echo ""
 done

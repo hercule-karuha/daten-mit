@@ -50,7 +50,7 @@ module mkProc(Proc);
 	FPGAMemory        iMem <- mkFPGAMemory;
     FPGAMemory        dMem <- mkFPGAMemory;
     CsrFile        csrf <- mkCsrFile;
-    Btb#(8)         btb <- mkBtb; // 64-entry BTB
+    Btb#(6)         btb <- mkBtb; // 64-entry BTB
 
 	Reg#(Bool) exeEpoch <- mkReg(False);
 

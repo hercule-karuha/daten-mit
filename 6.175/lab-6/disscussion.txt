@@ -87,3 +87,51 @@ Insts  = 2426
 IPC = 0.6670
 Return 0
 PASSED
+
+
+-------------------------------------------------------------------------------
+Discussion Question 6 (10 Points): Planning!
+
+One of the hardest things about this lab is properly training and integrating 
+the BHT into the pipeline. There are many mistakes that can be made while still 
+seeing decent results. By having a good plan based on the fundamentals of 
+direction prediction, you will avoid many of those mistakes.
+
+For this discussion question, state your plan for integrating the BHT into the 
+pipeline. The following questions should help guide you:
+
+Where will the BHT be positioned in the pipeline?
+What pipeline stage performs lookups into the BHT?
+In which pipeline stage will the BHT prediction be used?
+Will the BHT prediction need to be passed between pipeline stages?
+
+How to redirect PC using BHT prediction?
+Do you need to add a new epoch?
+How to handle the redirect messages?
+Do you need to change anything to the current instruction and its data structures if redirecting?
+
+How will you train the BHT?
+Which stage produces training data for the BHT?
+Which stage will use the interface method to train the BHT?
+How to send training data?
+For which instructions will you train the BHT?
+
+How will you know if your BHT works?
+-------------------------------------------------------------------------------
+decode
+decode
+fetch
+yes
+
+...
+yes
+...
+yes
+
+update
+execute
+execute
+update
+branch
+
+log output
