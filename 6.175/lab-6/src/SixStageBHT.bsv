@@ -96,13 +96,15 @@ module mkProc(Proc);
 		Data inst <- iMem.resp;
 		DecodedInst dInst = decode(inst);
 		let newPc = dInst.iType == Br ?
-		bht.ppcDP(if2d.pc + 4, if2d.pc + fromMaybe(?, dInst.imm)) : if2d.predPc;
+		bht.ppcDP(if2d.pc, if2d.pc + fromMaybe(?, dInst.imm)) : if2d.predPc;
 
 		if (if2d.dEpoch == decEpoch) begin
 			if (if2d.predPc != newPc) begin
+				$display("Decode: find wrong path, Redirect PC = %x to %x", if2d.pc, newPc);
 				decRedirect[0] <= Valid (DecRedirect {pc: if2d.pc, 
 													  nextPc: newPc, 
 													  eEpoch: if2d.eEpoch});
+				d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: newPc, dInst: dInst, eEpoch: if2d.eEpoch});
 			end 
 			else begin
 				d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: if2d.predPc, dInst: dInst, eEpoch: if2d.eEpoch});
@@ -214,7 +216,6 @@ module mkProc(Proc);
 			// fix mispred
 			pcReg[1] <= r.nextPc;
 			exeEpoch <= !exeEpoch; // flip epoch
-			decEpoch <= !decEpoch;
 			btb.update(r.pc, r.nextPc); // train BTB
 			$display("Fetch: Mispredict, redirected by Execute");
 		end
@@ -222,7 +223,7 @@ module mkProc(Proc);
 			if(r.eEpoch == exeEpoch) begin
 				pcReg[1] <= r.nextPc;
 				decEpoch <= !decEpoch;
-				$display("Decode: Mispredict, redirected by Execute");
+				$display("Fetch: Mispredict, redirected by Decode");
 			end
 		end
 		// reset EHR

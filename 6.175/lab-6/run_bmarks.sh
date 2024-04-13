@@ -23,6 +23,7 @@ echo "Benchmarks Test" > log
 # run each test
 for test_name in ${asm_tests[@]}; do
 	echo "-- benchmark test: ${test_name} --" >> log
+	echo "-- benchmark test: ${test_name} --"
 	# copy vmh file
 	mem_file=${vmh_dir}/${test_name}.riscv.vmh
 	if [ ! -f $mem_file ]; then
