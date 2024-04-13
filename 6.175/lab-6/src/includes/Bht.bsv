@@ -3,7 +3,7 @@ import Types::*;
 import ProcTypes::*;
 
 interface Bht#(numeric type indexSize);
- method Addr ppcDP(Addr pc, Addr targetPC);
+ method Addr ppcDP(Addr pc, DecodedInst dInst);
  method Action update(Addr pc, Bool taken);
 endinterface
 
@@ -40,10 +40,20 @@ module mkBHT(Bht#(indexSize)) provisos(Add#(indexSize,a__,32));
         end
     endfunction
 
-    method Addr ppcDP(Addr pc, Addr targetPC);
-        Bit#(indexSize) index = getBhtIndex(pc);
-        let direction = extractDir(bhtArr[index]);
-        return computeTarget(pc, targetPC, direction); 
+    method Addr ppcDP(Addr pc, DecodedInst dInst);
+        if(dInst.iType == Br) begin
+            let targetPC = pc + fromMaybe(?, dInst.imm);
+            Bit#(indexSize) index = getBhtIndex(pc);
+            let direction = extractDir(bhtArr[index]);
+            return computeTarget(pc, targetPC, direction); 
+        end
+        else if(dInst.iType == J) begin
+            let targetPC = pc + fromMaybe(?, dInst.imm);
+            return targetPC; 
+        end
+        else begin
+            return pc + 4;
+        end
     endmethod
     
     method Action update(Addr pc, Bool taken);

@@ -135,3 +135,72 @@ update
 branch
 
 log output
+
+-------------------------------------------------------------------------------
+Discussion Question 7 (5 Points): How much improvement do you see in the 
+bpred_bht.riscv.vmh test over the processor in SixStage.bsv?
+-------------------------------------------------------------------------------
+
+-- assembly test: bpred_bht --
+5979
+3413
+PASSED
+
+to
+
+-- assembly test: bpred_bht --
+3457
+1737
+PASSED
+
+-------------------------------------------------------------------------------
+Discussion Question 8 (5 Points): How much improvement do you see in the bpred_j.riscv.vmh
+ and bpred_j_noloop.riscv.vmh tests over the processor in SixStage.bsv?
+-------------------------------------------------------------------------------
+
+-- assembly test: bpred_j --
+2224
+1917
+-- assembly test: bpred_j_noloop --
+235
+227
+
+to
+
+-- assembly test: bpred_j --
+3430
+1816
+
+-- assembly test: bpred_j_noloop --
+73
+36
+
+-------------------------------------------------------------------------------
+Discussion Question 9 (5 Points): What IPC do you get for each benchmark? 
+How much improvement is this over the original six-stage pipeline?
+-------------------------------------------------------------------------------
+-- benchmark test: median --
+Benchmark median
+Cycles = 13423
+Insts  = 8213
+IPC = 0.6118
+-- benchmark test: multiply --
+Benchmark multiply
+Cycles = 39531
+Insts  = 26171
+IPC = 0.6620
+-- benchmark test: qsort --
+Benchmark qsort
+Cycles = 314644
+Insts  = 191347
+IPC = 0.6080
+-- benchmark test: towers --
+Benchmark tower
+Cycles = 6106
+Insts  = 4395
+IPC = 0.7197
+-- benchmark test: vvadd --
+Benchmark vvadd
+Cycles = 3637
+Insts  = 2426
+IPC = 0.6670

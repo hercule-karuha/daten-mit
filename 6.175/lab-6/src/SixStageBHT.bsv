@@ -95,8 +95,8 @@ module mkProc(Proc);
 		IF2D if2d = if2dFifo.first;
 		Data inst <- iMem.resp;
 		DecodedInst dInst = decode(inst);
-		let newPc = dInst.iType == Br ?
-		bht.ppcDP(if2d.pc, if2d.pc + fromMaybe(?, dInst.imm)) : if2d.predPc;
+		let newPc = dInst.iType == Br || dInst.iType == J ?
+		bht.ppcDP(if2d.pc, dInst) : if2d.predPc;
 
 		if (if2d.dEpoch == decEpoch) begin
 			if (if2d.predPc != newPc) begin
@@ -154,7 +154,7 @@ module mkProc(Proc);
 			ExecInst eInst = exec(rf2e.dInst, rf2e.rVal1, rf2e.rVal2, rf2e.pc, 
 			rf2e.predPc, rf2e.csrVal);
 			if(eInst.mispredict) begin
-				$display("Execute finds misprediction: PC = %x", rf2e.pc);
+				$display("Execute finds misprediction: Redirect PC = %x to %x", rf2e.pc, eInst.addr);
 				exeRedirect[0] <= Valid (ExeRedirect {
 					pc: rf2e.pc,
 					nextPc: eInst.addr
@@ -170,7 +170,7 @@ module mkProc(Proc);
 				$finish;
 			end
 
-			if(rf2e.dInst.iType == Br) begin
+			if(rf2e.dInst.iType == Br || rf2e.dInst.iType == J) begin
 				bht.update(rf2e.pc, eInst.brTaken);
 			end
 		end
