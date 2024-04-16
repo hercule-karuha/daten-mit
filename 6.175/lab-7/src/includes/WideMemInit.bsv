@@ -2,7 +2,7 @@ import GetPut::*;
 import Types::*;
 import BRAM::*;
 import Fifo::*;
-import MemTypes::*;
+import CMemTypes::*;
 import Memory::*;
 
 module mkWideMemInitDDR3( Fifo#(n,DDR3_Req) reqQ, WideMemInitIfc ifc );
@@ -30,3 +30,4 @@ module mkWideMemInitDDR3( Fifo#(n,DDR3_Req) reqQ, WideMemInitIfc ifc );
     endinterface
     method Bool done() = initialized;
 endmodule
+

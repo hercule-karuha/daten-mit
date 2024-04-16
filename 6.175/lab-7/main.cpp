@@ -27,23 +27,31 @@ class ConnectalProcIndication: public ConnectalProcIndicationWrapper
 {
 public:
     virtual void sendMessage(uint32_t msg){
-		    uint32_t type = msg>>16 ;
-            	    uint32_t data = msg & ( (1>>16) - 1);
-			if(type == 0) {
-				if(data == 0) {
-					fprintf(stderr, "PASSED\n");
-				} else {
-					fprintf(stderr, "FAILED: exit code = %d\n", data);
-				}
-		                run=0;
-			} else if(type == 1) {
-				fprintf(stderr, "%c", (char)data);
-			} else if(type == 2) {
-				print_int = uint32_t(data);
-			} else if(type == 3) {
-				print_int |= uint32_t(data) << 16;
-				fprintf(stderr, "%d", print_int);
+		uint32_t type = msg>>16 ;
+        uint32_t data = msg & ( (1<<16) - 1);
+		FILE  *fp;
+		fp=fopen("./log","a");//参数a表示追加写入
+		
+		if(type == 0) {
+			if(data == 0) {
+				fprintf(stderr, "PASSED\n");
+				fprintf(fp, "PASSED\n");
+			} else {
+				fprintf(stderr, "FAILED: exit code = %d\n", data);
+				fprintf(fp, "FAILED: exit code = %d\n", data);
 			}
+		            run=0;
+		} else if(type == 1) {
+			fprintf(stderr, "%c", (char)data);
+			fprintf(fp, "%c", (char)data);
+		} else if(type == 2) {
+			print_int = uint32_t(data);
+		} else if(type == 3) {
+			print_int |= uint32_t(data) << 16;
+			fprintf(stderr, "%d", print_int);
+			fprintf(fp, "%d", print_int);
+		}
+		fclose(fp);
   
     }
    ConnectalProcIndication(unsigned int id) : ConnectalProcIndicationWrapper(id){}

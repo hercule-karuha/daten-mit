@@ -4,19 +4,11 @@ import Memory::*;
 
 typedef Data MemResp;
 
-// just for debugging, add ID to each req
-//`ifdef DEBUG
-typedef Bit#(32) MemReqID;
-//`else
-//typedef Bit#(0) MemReqID;
-//`endif
-
-typedef enum{Ld, St, Lr, Sc, Fence} MemOp deriving(Eq, Bits, FShow);
+typedef enum{Ld, St} MemOp deriving(Eq, Bits, FShow);
 typedef struct{
     MemOp op;
     Addr  addr;
     Data  data;
-	MemReqID rid; // unique for debug mode
 } MemReq deriving(Eq, Bits, FShow);
 
 typedef 24 DDR3AddrSize;
@@ -27,13 +19,19 @@ typedef TDiv#(DDR3DataSize, 8) DDR3DataBytes;
 typedef Bit#(DDR3DataBytes) DDR3ByteEn;
 typedef TDiv#(DDR3DataSize, DataSz) DDR3DataWords;
 
+typedef 16 NumTokens;
+typedef Bit#(TLog#(NumTokens)) Token;
+
+typedef 16 LoadBufferSz;
+typedef Bit#(TLog#(LoadBufferSz)) LoadBufferIndex;
+
 // typedef struct {
 //     Bool        write;
 //     Bit#(64)    byteen;
 //     Bit#(24)    address;
 //     Bit#(512)   data;
 // } DDR3_Req deriving (Bits, Eq);
-typedef MemoryRequest#(DDR3AddrSize, DDR3DataSize) DDR3_Req;
+typedef MemoryRequest#(DDR3AddrSize, DDR3DataSize) DDR3_Req; 
 
 // typedef struct {
 //     Bit#(512)   data;
@@ -53,7 +51,7 @@ typedef struct {
 
 typedef union tagged {
     MemInitLoad InitLoad;
-     void InitDone;
+    void InitDone;
 } MemInit deriving(Eq, Bits, FShow);
 
 interface MemInitIfc;
@@ -75,3 +73,4 @@ interface WideMemInitIfc;
     interface Put#(WideMemInit) request;
     method Bool done();
 endinterface
+

@@ -1,28 +1,36 @@
-// Return Address Stack
-import Types::*;
-import ProcTypes::*;
-import RegFile::*;
 import Vector::*;
+import ProcTypes::*;
+import Types::*;
 
-interface Ras#(numeric type stackSize);
+interface Ras#(numeric type size);
     method Action push(Addr addr);
-    method ActionValue#(Addr) pop;
+    method ActionValue#(Maybe#(Addr)) pop();
 endinterface
 
-module mkRas(Ras#(stackSize)) provisos(Add#(1, a__, stackSize));
-    Vector#(stackSize, Reg#(Addr)) stack <- replicateM(mkRegU);
-    Reg#(Bit#(TLog#(stackSize))) top <- mkReg(0);
-    Bit#(TLog#(stackSize)) max_index = fromInteger(valueOf(stackSize) - 1);
-
-    method ActionValue#(Addr) pop();
-        let index = top == 0 ? max_index : top - 1;
-        let addr = stack[index];
-        top <= index;
-        return addr;
-    endmethod
+module mkRas(Ras#(size));
+    Vector#(size, Reg#(Maybe#(Addr))) stack <- replicateM(mkReg(tagged Invalid));
+    Reg#(Bit#(TLog#(size))) ptr <- mkReg(0);
 
     method Action push(Addr addr);
-        stack[top] <= addr;
-        top <= top == max_index ? 0 : top + 1;
+        if (ptr < fromInteger(valueOf(size) - 1)) begin
+            ptr <= ptr + 1;
+            stack[ptr + 1] <= tagged Valid addr;
+        end else begin 
+            ptr <= 0;
+            stack[0] <= tagged Valid addr;
+        end
+        
+    endmethod
+
+    method ActionValue#(Maybe#(Addr)) pop();
+        let r = stack[ptr];
+        stack[ptr] <= tagged Invalid;
+        if (ptr > 0) begin
+            ptr <= ptr - 1;
+        end else begin 
+            ptr <= fromInteger(valueOf(size) - 1);
+        end
+        return r;
+
     endmethod
 endmodule

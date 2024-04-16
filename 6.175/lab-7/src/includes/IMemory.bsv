@@ -1,5 +1,5 @@
 import Types::*;
-import MemTypes::*;
+import CMemTypes::*;
 import RegFile::*;
 import MemInit::*;
 

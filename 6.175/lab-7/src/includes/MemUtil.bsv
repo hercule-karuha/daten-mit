@@ -1,6 +1,6 @@
 import Types::*;
 import ProcTypes::*;
-import MemTypes::*;
+import CMemTypes::*;
 import CacheTypes::*;
 import Fifo::*;
 import Vector::*;
@@ -37,6 +37,9 @@ function WideMemReq toWideMemReq( MemReq req );
         write_en = 1 << wordsel;
     end
     Addr addr = req.addr;
+    // CacheLineBytes = 64
+    // addr = 'bxxxxxx000000
+    // 先置零，取出来再用offset取
     for( Integer i = 0 ; i < valueOf(TLog#(CacheLineBytes)) ; i = i+1 ) begin
         addr[i] = 0;
     end
@@ -93,7 +96,6 @@ module mkWideMemFromDDR3(   Fifo#(2, DDR3_Req) ddr3ReqFifo,
         $display("mkWideMemFromDDR3::resp : data = 0x%0x", x.data);
         return unpack(x.data);
     endmethod
-	method Bool respValid = ddr3RespFifo.notEmpty;
 endmodule
 
 module mkSplitWideMem(  Bool initDone, WideMem mem,
@@ -144,75 +146,6 @@ module mkSplitWideMem(  Bool initDone, WideMem mem,
                     respFifos[i].deq;
                     return x;
                 endmethod
-				method Bool respValid = respFifos[i].notEmpty;
-            endinterface);
-    end
-    return wideMemIfcs;
-endmodule
-
-// prioritize port 0 (data mem), 1~n-1 use round-robin (inst mem)
-module mkSplitWideMemRR(  Bool initDone, WideMem mem,
-                        Vector#(n, WideMem) ifc );
-
-	Reg#(Bit#(TLog#(n))) select <- mkReg(1); // round robin: 1 ~ n-1
-    Vector#(n, Fifo#(2, WideMemReq)) reqFifos <- replicateM(mkCFFifo);
-    Fifo#(TAdd#(n,1), Bit#(TLog#(n))) reqSource <- mkCFFifo;
-    Vector#(n, Fifo#(2, WideMemResp)) respFifos <- replicateM(mkCFFifo);
-
-    rule doDDR3Req(initDone);
-        Maybe#(Bit#(TLog#(n))) req_index = tagged Invalid;
-		if(reqFifos[0].notEmpty) begin
-			// prioritize port 0
-			req_index = Valid (0);
-		end
-		else if(reqFifos[select].notEmpty) begin
-			// give priority to round-robin selected FIFO
-			req_index = Valid (select);
-		end
-		// then search among 1~n-1
-        for( Integer i = 1; i < valueOf(n) ; i = i+1 ) begin
-            if( !isValid(req_index) && reqFifos[i].notEmpty ) begin
-                req_index = tagged Valid (fromInteger(i));
-            end
-        end
-
-        if( isValid(req_index) ) begin
-            let req = reqFifos[ fromMaybe(?,req_index) ].first;
-            reqFifos[ fromMaybe(?,req_index) ].deq();
-
-            mem.req(req);
-            if( req.write_en == 0 ) begin
-                // req is a load, so keep track of the source
-                reqSource.enq( fromMaybe(?,req_index) );
-            end
-
-			// change round robin: 1 ~ n-1
-			select <= select == fromInteger(valueOf(n) - 1) ? 1 : select + 1;
-        end
-    endrule
-
-    rule doDDR3Resp(initDone);
-        let resp <- mem.resp;
-
-        let source = reqSource.first;
-        reqSource.deq;
-
-        respFifos[source].enq( resp );
-    endrule
-
-    Vector#(n, WideMem) wideMemIfcs = newVector;
-    for( Integer i = 0 ; i < valueOf(n) ; i = i+1 ) begin
-        wideMemIfcs[i] =
-            (interface WideMem;
-                method Action req( WideMemReq x );
-                    reqFifos[i].enq(x);
-                endmethod
-                method ActionValue#(WideMemResp) resp;
-                    let x = respFifos[i].first;
-                    respFifos[i].deq;
-                    return x;
-                endmethod
-				method Bool respValid = respFifos[i].notEmpty;
             endinterface);
     end
     return wideMemIfcs;

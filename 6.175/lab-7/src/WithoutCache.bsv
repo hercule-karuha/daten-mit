@@ -1,41 +1,52 @@
+// Six Stage
+
 import Types::*;
 import ProcTypes::*;
-import MemTypes::*;
+import CMemTypes::*;
 import RFile::*;
-import IMemory::*;
-import DMemory::*;
 import Decode::*;
 import Exec::*;
 import CsrFile::*;
 import Vector::*;
 import Fifo::*;
 import Ehr::*;
-import Btb::*;
 import GetPut::*;
-import FPGAMemory::*;
+import Btb::*;
 import Scoreboard::*;
 import Bht::*;
-import MemUtil::*;
+import Ras::*;
 import Memory::*;
-import Cache::*;
-import FIFO::*;
 import SimMem::*;
-import CacheTypes::*;
-import MemInit::*;
 import ClientServer::*;
+import CacheTypes::*;
+import WideMemInit::*;
+import MemUtil::*;
+import Cache::*;
 
 typedef struct {
     Addr pc;
     Addr predPc;
-    Bool canary;
+	Bool d_epoch;
+    Bool e_epoch;
 } Fetch2Decode deriving (Bits, Eq);
 
 typedef struct {
     Addr pc;
     Addr predPc;
     DecodedInst dInst;
-    Bool canary;
-} Decode2Register deriving (Bits, Eq);
+    Bool e_epoch;
+} Decode2RegFetch deriving (Bits, Eq);
+
+// Data structure for Fetch to Execute stage
+typedef struct {
+    Addr pc;
+    Addr predPc;
+    DecodedInst dInst;
+    Data rVal1;
+    Data rVal2;
+    Data csrVal;
+    Bool e_epoch;
+} RegFetch2Execute deriving (Bits, Eq);
 
 typedef struct {
     Addr pc;
@@ -44,189 +55,336 @@ typedef struct {
     Data rVal1;
     Data rVal2;
     Data csrVal;
-    Bool canary;
-} Register2Execute deriving (Bits, Eq);
-
-typedef struct {
-    Addr pc;
-    Maybe#(ExecInst) eInst;
+    ExecInst eInst;
+    Bool e_epoch;
 } Execute2Memory deriving (Bits, Eq);
 
 typedef struct {
     Addr pc;
-    Maybe#(ExecInst) eInst;
+    Addr predPc;
+    DecodedInst dInst;
+    Data rVal1;
+    Data rVal2;
+    Data csrVal;
+    ExecInst eInst;
+    Bool e_epoch;
 } Memory2WriteBack deriving (Bits, Eq);
 
+// redirect msg from Execute stage
+typedef struct {
+	Addr pc;
+	Addr nextPc;
+} ExeRedirect deriving (Bits, Eq);
 
-module mkProc#(Fifo#(2, DDR3_Req) ddr3ReqFifo, Fifo#(2, DDR3_Resp) ddr3RespFifo)(Proc);
-    Ehr#(3, Addr)                pcReg <- mkEhr(?);
-    RFile                           rf <- mkBypassRFile;
-	Scoreboard#(6)                  sb <- mkPipelineScoreboard;
-    CsrFile                       csrf <- mkCsrFile;
-    Btb#(6)                        btb <- mkBtb;
-    Bht#(8)                        bht <- mkBht;
-    Reg#(Bool)                  canary <- mkReg(False);
-    Reg#(Int#(64))              cycles <- mkReg(0);
+// redirect msg from Decode stage
+typedef struct {
+	Addr pc;
+	Addr nextPc;
+} DcdRedirect deriving (Bits, Eq);
 
-    Fifo#(8, Fetch2Decode)     f2dFifo <- mkPipelineFifo;
-	Fifo#(8, Decode2Register)  d2rFifo <- mkPipelineFifo;
-	Fifo#(8, Register2Execute) r2eFifo <- mkPipelineFifo;
-	Fifo#(8, Execute2Memory)   e2mFifo <- mkPipelineFifo;
-	Fifo#(8, Memory2WriteBack) m2wFifo <- mkPipelineFifo;
 
-    Bool                      memReady =  True;
-    let                        wideMem <- mkWideMemFromDDR3(ddr3ReqFifo,ddr3RespFifo);
-    Vector#(2, WideMem)       splitMem <- mkSplitWideMem(memReady && csrf.started, wideMem);
+//(* synthesize *)
+module mkProc#(Fifo#(2, DDR3_Req) ddr3ReqFifo, Fifo#(2, DDR3_Resp) ddr3RespFifo) (Proc);
+    Ehr#(2, Addr) pcReg <- mkEhr(?);
+    RFile            rf <- mkRFile;
+	Scoreboard#(6)   sb <- mkCFScoreboard;
+    CsrFile        csrf <- mkCsrFile;
+    Btb#(6)         btb <- mkBtb; // 64-entry BTB
+	Bht#(8)         bht <- mkBht; //256-entry BHT
+	Ras#(8)			ras <- mkRas; //8-depth RAS
 
-    Cache iMem <- mkTranslator(splitMem[1]);
-    Cache dMem <- mkTranslator(splitMem[0]);
+	// global epoch for redirection from Execute stage
+	Reg#(Bool) exeEpoch <- mkReg(False);
+	Reg#(Bool) dcdEpoch <- mkReg(False);
 
-    rule drainMemResponses(!csrf.started);
-        $display("drain!");
-        ddr3RespFifo.deq;
-    endrule
+	// EHR for redirection
+	Ehr#(2, Maybe#(ExeRedirect)) exeRedirect <- mkEhr(Invalid);
+	Ehr#(2, Maybe#(DcdRedirect)) dcdRedirect <- mkEhr(Invalid);
 
-    rule forceStop (csrf.started);
-        cycles <= cycles + 1;
-        if (cycles == 100000) begin
-            $display("force stop: cycle = %d", cycles);
-            $finish;
-        end
-    endrule
+	// FIFO between six stages
+	Fifo#(2, Fetch2Decode) f2dFifo <- mkCFFifo;
+    Fifo#(2, Decode2RegFetch) d2rFifo <- mkCFFifo;
+    Fifo#(2, RegFetch2Execute) r2eFifo <- mkCFFifo;
+	Fifo#(2, Maybe#(Execute2Memory)) e2mFifo <- mkCFFifo;
+    Fifo#(2, Maybe#(Memory2WriteBack)) m2wFifo <- mkCFFifo;
 
-    rule doFetch(csrf.started);
-		iMem.req(MemReq { op: Ld, addr: pcReg[0], data: ? });
+
+    Bool memReady = True;
+	WideMem					wideMemWrapper <- mkWideMemFromDDR3(ddr3ReqFifo, ddr3RespFifo);
+	Vector#(2, WideMem)     wideMems <- mkSplitWideMem(memReady && csrf.started, wideMemWrapper);
+	Cache iMem <- mkTranslator(wideMems[1]);
+	Cache dMem <- mkTranslator(wideMems[0]);
+
+   	rule drainMemResponses( !csrf.started );
+		ddr3RespFifo.deq;
+	endrule
+
+	// fetch stage 
+	rule doFetch(csrf.started);
+		// fetch
+		iMem.req(MemReq {op: Ld, addr: pcReg[0], data: ?});
 		Addr predPc = btb.predPc(pcReg[0]);
-        pcReg[0] <= predPc;
-        let f2d = Fetch2Decode {
-            pc: pcReg[0],
-            predPc: predPc,
-            canary: canary
-        };
-        f2dFifo.enq(f2d);
-        $display("[fetch] PC = %x", f2d.pc);
-    endrule
-
-    rule doDecode (csrf.started);
-        let f2d = f2dFifo.first;
-        f2dFifo.deq;
-        let inst <- iMem.resp;
-		let dInst = decode(inst);
-        let d2r = Decode2Register{
-            pc: f2d.pc,
-            predPc: f2d.predPc,
-            dInst: dInst,
-            canary: f2d.canary
-        };
-        d2rFifo.enq(d2r);
-        $display("[decode] PC = %x", f2d.pc);
-    endrule
-
-    rule doRegisterFetch (csrf.started);
-        let d2r = d2rFifo.first;
-        let dInst = d2r.dInst;
-		Data rVal1 = rf.rd1(fromMaybe(?, dInst.src1));
-		Data rVal2 = rf.rd2(fromMaybe(?, dInst.src2));
-		Data csrVal = csrf.rd(fromMaybe(?, dInst.csr));
-		let r2e = Register2Execute {
-			pc: d2r.pc,
-			predPc: d2r.predPc,
-			dInst: d2r.dInst,
-			rVal1: rVal1,
-			rVal2: rVal2,
-			csrVal: csrVal,
-			canary: d2r.canary
+		pcReg[0] <= predPc;
+		Fetch2Decode f2d = Fetch2Decode {
+			pc: pcReg[0],
+			predPc: predPc,
+			d_epoch: dcdEpoch,
+			e_epoch: exeEpoch
 		};
-		if(!sb.search1(dInst.src1) && !sb.search2(dInst.src2)) begin
-			r2eFifo.enq(r2e);
-			sb.insert(dInst.dst);
-            d2rFifo.deq;
-			$display("[register] PC = %x", d2r.pc);
-		end else begin
-			$display("[register] PC = %x (stalled)", d2r.pc);
+		f2dFifo.enq(f2d);
+
+		$display("Test Fetch: PC = %x", pcReg[0]);
+	endrule
+
+	//Decode Stage
+	rule doDecode(csrf.started);
+		f2dFifo.deq();
+		Fetch2Decode f2d = f2dFifo.first;
+		Data inst <- iMem.resp;
+
+		if(f2d.e_epoch == exeEpoch) begin
+			if(f2d.d_epoch == dcdEpoch) begin
+				// decode
+				DecodedInst dInst = decode(inst);
+				Addr ppc = f2d.predPc;
+				Addr decoded_pc = f2d.pc + fromMaybe(?, dInst.imm);
+				//RAS used for Jal push stack and Jal caculation & update
+				if(dInst.iType == J) begin
+					Addr target_j_pc = 	decoded_pc;
+					if (target_j_pc != f2d.predPc) begin
+						dcdRedirect[0] <= tagged Valid DcdRedirect {
+                    		pc: f2d.pc,
+                    		nextPc: target_j_pc
+                		};
+                		ppc = target_j_pc;
+            		end
+					if ( fromMaybe(?,dInst.dst) == 1) begin
+						ras.push(f2d.pc + 4);
+					end
+				end
+				//BHT Prediction 
+				if (dInst.iType == Br) begin
+					Addr target_br_pc = bht.predPC(f2d.pc, decoded_pc);
+					if (target_br_pc != f2d.predPc) begin
+						dcdRedirect[0] <= tagged Valid DcdRedirect {
+                    		pc: f2d.pc,
+                    		nextPc: target_br_pc
+                		};
+                		ppc = target_br_pc;
+            		end
+				end
+				//RAS used for Jalr prediction
+				if(dInst.iType == Jr) begin
+					if ( fromMaybe(?,dInst.dst) == 1) begin
+						ras.push(f2d.pc + 4);
+					end
+					else if((isValid(dInst.dst) == False) && (fromMaybe(?,dInst.src1) == 1)) begin
+						let t <- ras.pop();
+						Addr target_jr_pc = fromMaybe(f2d.predPc, t);
+						if (target_jr_pc != f2d.predPc) begin
+							dcdRedirect[0] <= tagged Valid DcdRedirect {
+                    		pc: f2d.pc,
+                    		nextPc: target_jr_pc
+                		};
+                		ppc = target_jr_pc;
+						end
+					end
+				end
+				//enq
+				Decode2RegFetch d2r = Decode2RegFetch {
+					pc: f2d.pc,
+					predPc: ppc,
+					dInst: dInst,
+					e_epoch: f2d.e_epoch
+				};
+				d2rFifo.enq(d2r);
+
+				$display("Decode: PC = %x, inst = %x, expanded = ", f2d.pc, inst, showInst(inst));
+			end
+			else begin
+				$display("Decode Stage Stall: Br or Jal or Jalr Redirect. PC = %x", f2d.pc);
+			end
+		end
+		else begin
+			$display("Decode Stage Stall: Execute Stage Redirect. PC = %x", f2d.pc);
 		end
 	endrule
 
-	rule doExecute (csrf.started);
-		let r2e = r2eFifo.first;
-		r2eFifo.deq;
-        Maybe#(ExecInst) newEInst = Invalid;
-		if(r2e.canary != canary) begin
-			$display("[execute] canary mismatch. PC = %x", r2e.pc);
-		end else begin
-            $display("[execute] PC = %x", r2e.pc);
-			let eInst = exec(r2e.dInst, r2e.rVal1, r2e.rVal2, r2e.pc, r2e.predPc, r2e.csrVal);
-            if (eInst.iType == Unsupported) begin
-                $fwrite(stderr, "ERROR: Executing unsupported instruction at pc: %x. Exiting\n", r2e.pc);
-                $finish;
-            end
-            newEInst = Valid(eInst);
-            if (eInst.iType == J || eInst.iType == Jr || eInst.iType == Br) begin
-                btb.update(r2e.pc, eInst.addr);
-            end
-            if (eInst.mispredict) begin
-                pcReg[1] <= eInst.addr;
-                canary <= !canary;
-            end
-        end
-        let e2m = Execute2Memory{
-            pc: r2e.pc,
-            eInst: newEInst
-        };
-        e2mFifo.enq(e2m);
-    endrule
-
-    rule doMemory (csrf.started);
-        let e2m = e2mFifo.first;
-        e2mFifo.deq;
-
-        if (isValid(e2m.eInst)) begin
-            let eInst = fromMaybe(?, e2m.eInst);
-            if(eInst.iType == Ld) begin
-                dMem.req(MemReq{op: Ld, addr: eInst.addr, data: ?});
-            end else if(eInst.iType == St) begin
-                dMem.req(MemReq{op: St, addr: eInst.addr, data: eInst.data});
-            end
-            $display("[memory] PC = %x", e2m.pc);
-        end else begin
-            $display("[memory] canary mismatch. PC = %x", e2m.pc);
-        end
-        let m2w = Memory2WriteBack{
-            pc: e2m.pc,
-            eInst: e2m.eInst
-        };
-        m2wFifo.enq(m2w);
-    endrule
-
-    rule doWriteBack (csrf.started);
-        let m2w = m2wFifo.first;
-        m2wFifo.deq;
-        if (isValid(m2w.eInst)) begin
-            let eInst = fromMaybe(?, m2w.eInst);
-            if(eInst.iType == Ld) begin
-                eInst.data <- dMem.resp;
-            end
-            if(isValid(eInst.dst)) begin
-                rf.wr(fromMaybe(?, eInst.dst), eInst.data);
-            end
-            csrf.wr(eInst.iType == Csrw ? eInst.csr : Invalid, eInst.data);
-            $display("[writeback] PC = %x", m2w.pc);
-        end else begin
-            $display("[writeback] canary mismatch. PC = %x", m2w.pc);
-        end
-        sb.remove;
+	//RegFetch Stage
+	rule doRegFetch(csrf.started);
+		Decode2RegFetch d2r = d2rFifo.first;
+		if(d2r.e_epoch == exeEpoch) begin
+			// reg read
+			Data rVal1 = rf.rd1(fromMaybe(?, d2r.dInst.src1));
+			Data rVal2 = rf.rd2(fromMaybe(?, d2r.dInst.src2));
+			Data csrVal = csrf.rd(fromMaybe(?, d2r.dInst.csr));
+			// data to enq to FIFO
+			RegFetch2Execute r2e = RegFetch2Execute {
+				pc: d2r.pc,
+				predPc: d2r.predPc,
+				dInst: d2r.dInst,
+				rVal1: rVal1,
+				rVal2: rVal2,
+				csrVal: csrVal,
+				e_epoch: d2r.e_epoch
+			};
+			// search scoreboard to determine stall
+			if(!sb.search1(d2r.dInst.src1) && !sb.search2(d2r.dInst.src2)) begin
+				// enq & update PC, sb
+				r2eFifo.enq(r2e);
+				d2rFifo.deq();
+				sb.insert(d2r.dInst.dst);
+				$display("RegFetch: PC = %x", d2r.pc);
+			end
+			else begin
+				$display("RegFetch Stalled to avoid data hazard: PC = %x", d2r.pc);
+			end
+		end
+		else begin
+			d2rFifo.deq();
+			$display("RegFetch Stage Stall: Execute Stage Redirect. PC = %x", d2r.pc);
+		end
 	endrule
 
-    method ActionValue#(CpuToHostData) cpuToHost if(csrf.started);
+	//Execute Stage
+	rule doExecute(csrf.started);
+		r2eFifo.deq();
+		RegFetch2Execute r2e = r2eFifo.first;
+
+		if(r2e.e_epoch != exeEpoch) begin
+			// kill wrong-path inst, just deq sb
+			e2mFifo.enq(tagged Invalid);
+			$display("Execute: Stall and kill instruction. PC = %x", r2e.pc);
+		end
+		else begin
+			// execute
+			ExecInst eInst = exec(r2e.dInst, r2e.rVal1, r2e.rVal2, r2e.pc, r2e.predPc, r2e.csrVal);  
+			// check unsupported instruction at commit time. Exiting
+			if(eInst.iType == Unsupported) begin
+				$fwrite(stderr, "ERROR: Executing unsupported instruction at pc: %x. Exiting\n", r2e.pc);
+				$finish;
+			end
+
+			// check mispred: with proper BTB, it is only possible for branch/jump inst 
+			//under ppc = pc, there will be mispredictions for non-branch/jump insts..
+			//this btb must be letting them redirect tho .. 
+			//when the instruction that caused the misdirection is a store, the memory address for the store is set as next pc
+			//unsuported instruction ensues...
+			if(eInst.mispredict) begin //no btb update?
+				$display("Execute finds misprediction: PC = %x", r2e.pc);
+				exeRedirect[0] <= Valid (ExeRedirect {
+					pc: r2e.pc,
+					nextPc: eInst.addr // Hint for discussion 1: check this line
+				});
+			end
+
+			if (eInst.iType == Br) begin
+                bht.update(r2e.pc, eInst.brTaken);
+            end
+
+			Execute2Memory e2m = Execute2Memory {
+				pc: r2e.pc,
+				predPc: r2e.predPc,
+				dInst: r2e.dInst,
+				rVal1: r2e.rVal1,
+				rVal2: r2e.rVal2,
+				csrVal: r2e.csrVal,
+				eInst: eInst,
+				e_epoch: r2e.e_epoch
+			};
+			e2mFifo.enq(tagged Valid e2m);
+
+			$display("Execute: PC = %x", r2e.pc);
+		end
+	endrule
+
+	//Memory Stage
+	rule doMemory(csrf.started);
+		e2mFifo.deq();
+		let e2m_maybe = e2mFifo.first;
+
+		if (e2m_maybe matches tagged Valid .e2m) begin
+			if(e2m.eInst.iType == Ld) begin
+				dMem.req(MemReq{op: Ld, addr: e2m.eInst.addr, data: ?});
+			end else if(e2m.eInst.iType == St) begin
+				dMem.req(MemReq{op: St, addr: e2m.eInst.addr, data: e2m.eInst.data});
+			end
+			Memory2WriteBack m2w = Memory2WriteBack {
+				pc: e2m.pc,
+				predPc: e2m.predPc,
+				dInst: e2m.dInst,
+				rVal1: e2m.rVal1,
+				rVal2: e2m.rVal2,
+				csrVal: e2m.csrVal,
+				eInst: e2m.eInst,
+				e_epoch: e2m.e_epoch
+			};
+			m2wFifo.enq(tagged Valid m2w);
+			$display("Memory: PC = %x", e2m.pc);
+		end
+		else begin
+			$display("Memory: Stall and kill instruction.");
+			m2wFifo.enq(tagged Invalid);
+		end
+	endrule
+
+	//WriteBack Stage 
+	rule doWriteBack(csrf.started);
+		m2wFifo.deq();
+		let m2w_maybe = m2wFifo.first;
+		if (m2w_maybe matches tagged Valid .m2w) begin
+			let eInst = m2w.eInst;
+			if(eInst.iType == Ld) begin
+            	eInst.data <- dMem.resp;
+        	end
+			if(isValid(eInst.dst)) begin
+				rf.wr(fromMaybe(?, eInst.dst), eInst.data);
+			end
+			csrf.wr(eInst.iType == Csrw ? eInst.csr : Invalid, eInst.data);
+			$display("WriteBack: PC = %x", m2w.pc);
+		end
+		else begin
+			$display("Memory: Stall and kill instruction.");
+		end
+		// remove from scoreboard
+		sb.remove;
+	endrule
+
+	(* fire_when_enabled *)
+	(* no_implicit_conditions *)
+	rule cononicalizeRedirect(csrf.started);
+		if(exeRedirect[1] matches tagged Valid .r) begin
+			// fix mispred
+			pcReg[1] <= r.nextPc;
+			exeEpoch <= !exeEpoch; // flip epoch
+			btb.update(r.pc, r.nextPc); // train BTB
+			$display("Fetch: Mispredict, redirected by Execute");
+		end
+		else if(dcdRedirect[1] matches tagged Valid .r) begin
+			// fix mispred
+            pcReg[1] <= r.nextPc;
+            dcdEpoch <= !dcdEpoch; // flip epoch
+            btb.update(r.pc, r.nextPc); // train BTB
+            $display("Fetch: Mispredict, redirected by Decode");
+        end
+
+		// reset EHR
+		exeRedirect[1] <= Invalid;
+		dcdRedirect[1] <= Invalid;
+	endrule
+
+
+    method ActionValue#(CpuToHostData) cpuToHost;
         let ret <- csrf.cpuToHost;
         return ret;
     endmethod
 
     method Action hostToCpu(Bit#(32) startpc) if ( !csrf.started && memReady );
-	$display("Start cpu");
-        csrf.start(0); // only 1 core, id = 0
+		csrf.start(0); // only 1 core, id = 0
+		// $display("Start at pc 200\n");
+		// $fflush(stdout);
         pcReg[0] <= startpc;
     endmethod
 
-
 endmodule
+

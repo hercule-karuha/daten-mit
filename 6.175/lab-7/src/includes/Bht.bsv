@@ -4,47 +4,44 @@ import RegFile::*;
 import Vector::*;
 
 interface Bht#(numeric type bhtIndex);
-    method Addr ppcDP(Addr pc, Addr targetPC);
+    method Addr predPC(Addr pc, Addr targetPC);
     method Action update(Addr pc, Bool taken);
 endinterface
 
-module mkBht(Bht#(bhtIndex)) provisos( Add#(bhtIndex, a__, 32), NumAlias#(TExp#(bhtIndex), bhtEntries) );
-    Vector#(bhtEntries, Reg#(Bit#(2))) bhtArr <- replicateM(mkReg(2'b01));
+module mkBht(Bht#(bhtIndex)) provisos (Add#(a__, bhtIndex, 32));
+    Vector#(TExp#(bhtIndex), Reg#(Bit#(2))) bhtArr <- replicateM(mkReg(2'b00));
+	//use 2 bits prediction, 00: Strong Non-taken,  01:Weak Non-taken, 10: Weak Taken, 11: Strong Taken
 
-    Bit#(2) maxDP = 2'b11;
-    Bit#(2) minDP = 2'b00;
-
-    function Bit#(bhtIndex) getBhtIndex(Addr pc);
+    function Bit#(bhtIndex) getIndex(Addr pc);
         return truncate(pc >> 2);
     endfunction
 
-    function Bit#(2) getBhtEntry(Addr pc);
-        return bhtArr[getBhtIndex(pc)];
+    function Bit#(2) getEntry(Addr pc);
+        return bhtArr[getIndex(pc)];
     endfunction
 
-    function Bit#(2) newDPBits(Bit#(2) oldDPBits, Bool taken);
-        let newDP = oldDPBits;
-        if (taken) begin
-            newDP = newDP + 1;
-            newDP = newDP == minDP ? maxDP : newDP;
-        end
-        else begin
-            newDP = newDP - 1;
-            newDP = newDP == maxDP ? minDP : newDP;
-        end
-        return newDP;
+    function Bit#(2) update_state(Bit#(2) predBits, Bool taken);
+        Bit#(2) new_predBits = ?;
+		case(predBits)
+		2'b00: new_predBits = (taken)? 2'b01 : 2'b00;
+		2'b01: new_predBits = (taken)? 2'b11 : 2'b00;
+		2'b10: new_predBits = (taken)? 2'b11 : 2'b00;
+		2'b11: new_predBits = (taken)? 2'b11 : 2'b10;
+		default: new_predBits = 2'b00;
+		endcase
+        return new_predBits;
     endfunction
 
-    method Addr ppcDP(Addr pc, Addr targetPC);
-        let dpBits = getBhtEntry(pc);
-        let taken = (dpBits == 2'b11 || dpBits == 2'b10) ? True : False;
+    method Addr predPC(Addr pc, Addr targetPC);
+        let predBits = getEntry(pc);
+        let taken = (predBits == 2'b11 || predBits == 2'b10) ? True : False;
         let pred_pc = taken ? targetPC : pc + 4;
         return pred_pc;
     endmethod
     
     method Action update(Addr pc, Bool taken);
-        let index  = getBhtIndex(pc);
-        let dpBits = getBhtEntry(pc);
-        bhtArr[index] <= newDPBits(dpBits, taken);
+        let index  = getIndex(pc);
+        let predBits = getEntry(pc);
+        bhtArr[index] <= update_state(predBits, taken);
     endmethod
 endmodule
