@@ -20,6 +20,7 @@ typedef struct {
     Addr predPc;
 	Bool eEpoch;
 	Bool dEpoch;
+	Bool rEpoch;
 } IF2D deriving (Bits, Eq);
 
 typedef struct {
@@ -27,6 +28,7 @@ typedef struct {
     Addr predPc;
     DecodedInst dInst;
 	Bool eEpoch;
+	Bool rEpoch;
 } D2RF deriving (Bits, Eq);
 
 typedef struct {
@@ -48,6 +50,7 @@ typedef struct {
 	Addr pc;
 	Addr nextPc;
 	Bool eEpoch;
+	Bool rEpoch;
 } DecRedirect deriving (Bits, Eq);
 
 typedef struct {
@@ -71,6 +74,7 @@ module mkProc(Proc);
 
 	Reg#(Bool) exeEpoch <- mkReg(False);
 	Reg#(Bool) decEpoch <- mkReg(False);
+	Reg#(Bool) refEpoch <- mkReg(False);
 
 	Ehr#(2, Maybe#(ExeRedirect)) exeRedirect <- mkEhr(Invalid);
 	Ehr#(2, Maybe#(DecRedirect)) decRedirect <- mkEhr(Invalid);
@@ -93,7 +97,8 @@ module mkProc(Proc);
 	rule doInstructionFetch(csrf.started);
 		iMem.req(MemReq{op: Ld, addr: pcReg[0], data: ?});
 		Addr predPc = btb.predPc(pcReg[0]);
-		if2dFifo.enq(IF2D{pc: pcReg[0], predPc: predPc, eEpoch: exeEpoch, dEpoch: decEpoch});
+		if2dFifo.enq(IF2D{pc: pcReg[0], predPc: predPc, eEpoch: exeEpoch, 
+						  dEpoch: decEpoch, rEpoch: refEpoch});
 		pcReg[0] <= predPc;
 
 		$display("InstructionFetch: PC = %x", pcReg[0]);
@@ -103,51 +108,50 @@ module mkProc(Proc);
 		IF2D if2d = if2dFifo.first;
 		Data inst <- iMem.resp;
 		DecodedInst dInst = decode(inst);
-		let newPc = dInst.iType == Br || dInst.iType == J ?
-		bht.ppcDP(if2d.pc, dInst) : if2d.predPc;
 
-
-
-		if (if2d.dEpoch == decEpoch) begin
+		if (if2d.dEpoch == decEpoch && if2d.eEpoch == exeEpoch && if2d.rEpoch == refEpoch) begin
             let dst = fromMaybe(?, dInst.dst);
             let rs1 = fromMaybe(?, dInst.src1);
+			let predPc = if2d.predPc;
+            let curPredPc = if2d.predPc;
+			let pushAddr = if2d.pc + 4;
+			Addr popAddr = 0; 
+			Bool popValid = False;
+
             if((dInst.iType == J || dInst.iType == Jr) && dst == 1) begin
-                ras.push(if2d.pc + 4);
+                ras.push(pushAddr);
             end
-            if(dInst.iType == Jr && dst == 0 && rs1 == 1) begin
-                let rasPop <- ras.pop;
-                if(rasPop matches tagged Valid .raddr) begin
-                    decRedirect[0] <= Valid (DecRedirect {pc: if2d.pc, 
-                                                          nextPc: raddr, 
-                                                          eEpoch: if2d.eEpoch});
-                    d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: raddr, dInst: dInst, eEpoch: if2d.eEpoch});
-                end
-                else if (if2d.predPc != newPc) begin
-                    $display("Decode: find wrong path, Redirect PC = %x to %x", if2d.pc, newPc);
-                    decRedirect[0] <= Valid (DecRedirect {pc: if2d.pc, 
-                                                          nextPc: newPc, 
-                                                          eEpoch: if2d.eEpoch});
-                    d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: newPc, dInst: dInst, eEpoch: if2d.eEpoch});
-                end 
-                else begin
-                    d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: if2d.predPc, dInst: dInst, eEpoch: if2d.eEpoch});
-                end
-            end
-			else if (if2d.predPc != newPc) begin
-				$display("Decode: find wrong path, Redirect PC = %x to %x", if2d.pc, newPc);
-				decRedirect[0] <= Valid (DecRedirect {pc: if2d.pc, 
-													  nextPc: newPc, 
-													  eEpoch: if2d.eEpoch});
-				d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: newPc, dInst: dInst, eEpoch: if2d.eEpoch});
-			end 
-			else begin
-				d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: if2d.predPc, dInst: dInst, eEpoch: if2d.eEpoch});
+			else if(dInst.iType == Jr && dst == 0 && rs1 == 1) begin
+				let popMaybeAddr <- ras.pop;
+                popValid = isValid(popMaybeAddr);
+                popAddr  = fromMaybe(?, popMaybeAddr);
 			end
-		end 
-		else begin
-			$display("Decode: Kill instruction: PC = %x", if2d.pc);
+
+			if(dInst.iType == Br) begin
+                curPredPc = if2d.pc + fromMaybe(?, dInst.imm);
+                curPredPc = bht.ppcDP(if2d.pc, dInst);
+            end
+			else if(dInst.iType == J) begin
+                curPredPc = if2d.pc + fromMaybe(?, dInst.imm);
+            end
+            else if(dInst.iType == Jr && dst == 0 && rs1 == 1) begin
+                if(popValid) begin
+                    curPredPc = popAddr;
+                end
+            end
+
+			if(curPredPc != predPc) begin
+                $display("[Decode][find Mispredict]: PC = %x, inst = %x, expanded = ", if2d.pc, inst, showInst(inst));
+                decRedirect[0] <= tagged Valid DecRedirect{pc:if2d.pc, nextPc:curPredPc, eEpoch: if2d.eEpoch, rEpoch: if2d.rEpoch};
+                predPc = curPredPc;  //curPredPc
+            end
+            else begin
+                $display("[Decode][right predict]: PC = %x, inst = %x, expanded = ", if2d.pc, inst, showInst(inst));
+            end
+
+			d2rfFifo.enq(D2RF{pc: if2d.pc, predPc: predPc, dInst: dInst, 
+							  eEpoch: if2d.eEpoch, rEpoch: if2d.rEpoch});
 		end
-		
 		if2dFifo.deq;
 		$display("Decode: PC = %x, inst = %x, expanded = ", if2d.pc, inst, showInst(inst));
 	endrule
@@ -156,30 +160,39 @@ module mkProc(Proc);
 		D2RF d2rf = d2rfFifo.first;
 
 		DecodedInst dInst = d2rf.dInst;
+		if (d2rf.rEpoch == refEpoch && d2rf.eEpoch == exeEpoch) begin
+			if(!sb.search1(dInst.src1) && !sb.search2(dInst.src2)) begin
+				d2rfFifo.deq;
+				sb.insert(dInst.dst);
 
-		if(!sb.search1(dInst.src1) && !sb.search2(dInst.src2)) begin
-			d2rfFifo.deq;
-			sb.insert(dInst.dst);
-			
-			Data rVal1 = rf.rd1(fromMaybe(?, dInst.src1));
-			Data rVal2 = rf.rd2(fromMaybe(?, dInst.src2));
-			Data csrVal = csrf.rd(fromMaybe(?, dInst.csr));
+				Data rVal1 = rf.rd1(fromMaybe(?, dInst.src1));
+				Data rVal2 = rf.rd2(fromMaybe(?, dInst.src2));
+				Data csrVal = csrf.rd(fromMaybe(?, dInst.csr));
 
-			rf2eFifo.enq(RF2E{pc: d2rf.pc, predPc: d2rf.predPc, dInst: d2rf.dInst, 
-			rVal1: rVal1, rVal2: rVal2, csrVal: csrVal, eEpoch: d2rf.eEpoch});
-			$display("RegisterFetch: PC = %x", d2rf.pc);
+				$display("RegisterFetch: PC = %x", d2rf.pc);
 
-            if(dInst.iType == Jr) begin
-                Bit#(32) nextPc = {truncateLSB(rVal1 + fromMaybe(?, dInst.imm)), 1'b0};
-				refRedirect[0] <= Valid (RefRedirect {pc: d2rf.pc, 
-													  nextPc: nextPc, 
-													  eEpoch: d2rf.eEpoch});
-                $display("RegisterFetch: Redirect");
-            end
+    	        if(dInst.iType == Jr) begin
+    	            Bit#(32) nextPc = {truncateLSB(rVal1 + fromMaybe(?, dInst.imm)), 1'b0};
+					refRedirect[0] <= Valid (RefRedirect {pc: d2rf.pc, 
+														  nextPc: nextPc, 
+														  eEpoch: d2rf.eEpoch});
+					rf2eFifo.enq(RF2E{pc: d2rf.pc, predPc: nextPc, dInst: d2rf.dInst, 
+								  rVal1: rVal1, rVal2: rVal2, csrVal: csrVal, eEpoch: d2rf.eEpoch});														  
+    	            $display("RegisterFetch: Redirect");
+    	        end
+				else begin
+					rf2eFifo.enq(RF2E{pc: d2rf.pc, predPc: d2rf.predPc, dInst: d2rf.dInst, 
+					rVal1: rVal1, rVal2: rVal2, csrVal: csrVal, eEpoch: d2rf.eEpoch});
+				end
 
+			end
+			else begin
+				$display("RegisterFetch Stalled: PC = %x", d2rf.pc);
+			end
 		end
 		else begin
-			$display("RegisterFetch Stalled: PC = %x", d2rf.pc);
+			d2rfFifo.deq;
+			$display("RegisterFetch: kill instruction PC = %x", d2rf.pc);
 		end
 	endrule
 
@@ -263,13 +276,16 @@ module mkProc(Proc);
 		end
         else if(refRedirect[1] matches tagged Valid .r) begin
             if(r.eEpoch == exeEpoch) begin
+				refEpoch <= !refEpoch;
 				pcReg[1] <= r.nextPc;
+				btb.update(r.pc, r.nextPc);
 			end
         end
 		else if(decRedirect[1] matches tagged Valid .r) begin
-			if(r.eEpoch == exeEpoch) begin
+			if(r.eEpoch == exeEpoch && r.rEpoch == refEpoch) begin
 				pcReg[1] <= r.nextPc;
 				decEpoch <= !decEpoch;
+				btb.update(r.pc, r.nextPc);
 				$display("Fetch: Mispredict, redirected by Decode");
 			end
 		end
