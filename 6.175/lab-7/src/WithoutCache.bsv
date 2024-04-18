@@ -2,7 +2,7 @@ import Types::*;
 import ProcTypes::*;
 import CMemTypes::*;
 import RFile::*;
-import FPGAMemory::*;
+import Cache::*;
 import Decode::*;
 import Exec::*;
 import CsrFile::*;
@@ -13,6 +13,10 @@ import GetPut::*;
 import Btb::*;
 import Bht::*;
 import Scoreboard::*;
+import WideMemInit::*;
+import MemUtil::*;
+import Cache::*;
+import CacheTypes::*;
 
 
 typedef struct {
@@ -51,13 +55,11 @@ typedef struct {
 } DecRedirect deriving (Bits, Eq);
 
 
-(* synthesize *)
-module mkProc(Proc);
+// (* synthesize *)
+module mkProc#(Fifo#(2,DDR3_Req) ddr3ReqFifo, Fifo#(2,DDR3_Resp) ddr3RespFifo)(Proc);
     Ehr#(2, Addr) pcReg <- mkEhr(?);
     RFile rf <- mkRFile;
 	Scoreboard#(6) sb <- mkCFScoreboard;
-	FPGAMemory iMem <- mkFPGAMemory;
-    FPGAMemory dMem <- mkFPGAMemory;
     CsrFile csrf <- mkCsrFile;
     Btb#(6) btb <- mkBtb; // 64-entry BTB
 	Bht#(8)	bht <- mkBHT;
@@ -75,12 +77,16 @@ module mkProc(Proc);
 	Fifo#(6, ExecInst) e2mFifo <- mkCFFifo;
 	Fifo#(6, ExecInst) m2wbFifo <- mkCFFifo;
 
-    Bool memReady = iMem.init.done && dMem.init.done;
-    rule test (!memReady);
-        let e = tagged InitDone;
-        iMem.init.request.put(e);
-        dMem.init.request.put(e);
-    endrule
+	Bool memReady = True;
+	WideMem wideMemWrapper <- mkWideMemFromDDR3( ddr3ReqFifo, ddr3RespFifo );
+	Vector#(2, WideMem) wideMems <- mkSplitWideMem( memReady && csrf.started, wideMemWrapper );
+
+	rule drainMemResponses( !csrf.started );
+		ddr3RespFifo.deq;
+	endrule
+
+	Cache iMem <- mkTranslator(wideMems[0]);
+    Cache dMem <- mkTranslator(wideMems[1]);
 
 	rule doInstructionFetch(csrf.started);
 		iMem.req(MemReq{op: Ld, addr: pcReg[0], data: ?});
@@ -242,7 +248,4 @@ module mkProc(Proc);
 		// $fflush(stdout);
         pcReg[0] <= startpc;
     endmethod
-
-	interface iMemInit = iMem.init;
-    interface dMemInit = dMem.init;
 endmodule

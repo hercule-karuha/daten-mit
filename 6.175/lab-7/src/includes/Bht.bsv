@@ -1,47 +1,64 @@
+import Vector::*;
 import Types::*;
 import ProcTypes::*;
-import RegFile::*;
-import Vector::*;
 
-interface Bht#(numeric type bhtIndex);
-    method Addr predPC(Addr pc, Addr targetPC);
-    method Action update(Addr pc, Bool taken);
+interface Bht#(numeric type indexSize);
+ method Addr ppcDP(Addr pc, DecodedInst dInst);
+ method Action update(Addr pc, Bool taken);
 endinterface
 
-module mkBht(Bht#(bhtIndex)) provisos (Add#(a__, bhtIndex, 32));
-    Vector#(TExp#(bhtIndex), Reg#(Bit#(2))) bhtArr <- replicateM(mkReg(2'b00));
-	//use 2 bits prediction, 00: Strong Non-taken,  01:Weak Non-taken, 10: Weak Taken, 11: Strong Taken
+module mkBHT(Bht#(indexSize)) provisos(Add#(indexSize,a__,32));
+    Vector#(TExp#(indexSize), Reg#(Bit#(2))) bhtArr <- replicateM(mkReg(2'b01));
 
-    function Bit#(bhtIndex) getIndex(Addr pc);
-        return truncate(pc >> 2);
+    function Bit#(indexSize) getBhtIndex(Addr pc) = truncate(pc >> 2);
+    function Addr computeTarget(Addr pc, Addr targetPC, Bool taken) = taken ? targetPC : pc + 4;
+    function Bool extractDir(Bit#(2) bhtEntry);
+        case (bhtEntry) matches
+            2'b00 : return False;
+            2'b01 : return False;
+            2'b10 : return True;
+            2'b11 : return True;
+        endcase
     endfunction
 
-    function Bit#(2) getEntry(Addr pc);
-        return bhtArr[getIndex(pc)];
+    function Bit#(2) newDpBits(Bit#(2) dpBits, Bool taken);
+        if(taken) begin
+            case (dpBits) matches
+              2'b00 : return 2'b01;
+              2'b01 : return 2'b10;
+              2'b10 : return 2'b11;
+              2'b11 : return 2'b11;
+            endcase
+        end
+        else begin
+            case (dpBits) matches
+               2'b00 : return 2'b00;
+               2'b01 : return 2'b00;
+               2'b10 : return 2'b01;
+               2'b11 : return 2'b10;
+             endcase
+        end
     endfunction
 
-    function Bit#(2) update_state(Bit#(2) predBits, Bool taken);
-        Bit#(2) new_predBits = ?;
-		case(predBits)
-		2'b00: new_predBits = (taken)? 2'b01 : 2'b00;
-		2'b01: new_predBits = (taken)? 2'b11 : 2'b00;
-		2'b10: new_predBits = (taken)? 2'b11 : 2'b00;
-		2'b11: new_predBits = (taken)? 2'b11 : 2'b10;
-		default: new_predBits = 2'b00;
-		endcase
-        return new_predBits;
-    endfunction
-
-    method Addr predPC(Addr pc, Addr targetPC);
-        let predBits = getEntry(pc);
-        let taken = (predBits == 2'b11 || predBits == 2'b10) ? True : False;
-        let pred_pc = taken ? targetPC : pc + 4;
-        return pred_pc;
+    method Addr ppcDP(Addr pc, DecodedInst dInst);
+        if(dInst.iType == Br) begin
+            let targetPC = pc + fromMaybe(?, dInst.imm);
+            Bit#(indexSize) index = getBhtIndex(pc);
+            let direction = extractDir(bhtArr[index]);
+            return computeTarget(pc, targetPC, direction); 
+        end
+        else if(dInst.iType == J) begin
+            let targetPC = pc + fromMaybe(?, dInst.imm);
+            return targetPC; 
+        end
+        else begin
+            return pc + 4;
+        end
     endmethod
     
     method Action update(Addr pc, Bool taken);
-        let index  = getIndex(pc);
-        let predBits = getEntry(pc);
-        bhtArr[index] <= update_state(predBits, taken);
+        Bit#(indexSize) index = getBhtIndex(pc);
+        let dpBits = bhtArr[index];
+        bhtArr[index] <= newDpBits(dpBits, taken); 
     endmethod
 endmodule

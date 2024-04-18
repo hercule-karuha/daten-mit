@@ -30,45 +30,6 @@ function Bit#(TMul#(wordSize,numWords)) replicateWord( Bit#(wordSize) word ) pro
     return x;
 endfunction
 
-function WideMemReq toWideMemReq( MemReq req );
-    Bit#(CacheLineWords) write_en = 0;
-    CacheWordSelect wordsel = truncate( req.addr >> 2 );
-    if( req.op == St ) begin
-        write_en = 1 << wordsel;
-    end
-    Addr addr = req.addr;
-    // CacheLineBytes = 64
-    // addr = 'bxxxxxx000000
-    // 先置零，取出来再用offset取
-    for( Integer i = 0 ; i < valueOf(TLog#(CacheLineBytes)) ; i = i+1 ) begin
-        addr[i] = 0;
-    end
-    CacheLine data = replicate( req.data );
-
-    return WideMemReq {
-                write_en: write_en,
-                addr: addr,
-                data: data
-            };
-endfunction
-
-function DDR3_Req toDDR3Req( MemReq req );
-    Bool write = (req.op == St);
-    CacheWordSelect wordSelect = truncate(req.addr >> 2);
-    DDR3ByteEn byteen = wordEnToByteEn( 1 << wordSelect );
-	if( req.op == Ld ) begin
-		byteen = 0;
-	end
-    DDR3Addr addr = truncate( req.addr >> valueOf(TLog#(DDR3DataBytes)) );
-    DDR3Data data = replicateWord(req.data);
-    return DDR3_Req {
-                write:      (req.op == St),
-                byteen:     byteen,
-                address:    addr,
-                data:       data
-            };
-endfunction
-
 module mkWideMemFromDDR3(   Fifo#(2, DDR3_Req) ddr3ReqFifo,
                             Fifo#(2, DDR3_Resp) ddr3RespFifo,
                             WideMem ifc );
@@ -87,7 +48,7 @@ module mkWideMemFromDDR3(   Fifo#(2, DDR3_Req) ddr3ReqFifo,
                                 address:    addr,
                                 data:       pack(x.data)
                             };
-        ddr3ReqFifo.enq( ddr3_req );
+        ddr3ReqFifo.enq(ddr3_req);
         $display("mkWideMemFromDDR3::req : wideMemReq.addr = 0x%0x, ddr3Req.address = 0x%0x, ddr3Req.byteen = 0x%0x", x.addr, ddr3_req.address, ddr3_req.byteen);
     endmethod
     method ActionValue#(WideMemResp) resp;
