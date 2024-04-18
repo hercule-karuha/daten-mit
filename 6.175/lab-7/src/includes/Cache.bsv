@@ -3,6 +3,7 @@ import CMemTypes::*;
 import Fifo::*;
 import Types::*;
 import Vector::*;
+import MemUtil::*;
 
 module mkTranslator(WideMem wideMem, Cache cache);
     Fifo#(2, MemReq) reqFifo <- mkCFFifo;
@@ -22,22 +23,3 @@ module mkTranslator(WideMem wideMem, Cache cache);
         return cacheLine[offset];
     endmethod
 endmodule
-
-function WideMemReq toWideMemReq(MemReq req );
-    Bit#(CacheLineWords) write_en = 0;
-    CacheWordSelect wordsel = truncate( req.addr >> 2 );
-    if( req.op == St ) begin
-        write_en = 1 << wordsel;
-    end
-    Addr addr = req.addr;
-    for( Integer i = 0 ; i < valueOf(TLog#(CacheLineBytes)) ; i = i+1 ) begin
-        addr[i] = 0;
-    end
-    CacheLine data = replicate( req.data );
-
-    return WideMemReq {
-                write_en: write_en,
-                addr: addr,
-                data: data
-            };
-endfunction
