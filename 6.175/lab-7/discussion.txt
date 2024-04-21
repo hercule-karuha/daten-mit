@@ -32,3 +32,47 @@ Benchmark vvadd
 Cycles = 19296
 Insts  = 2414
 Return 0
+
+-------------------------------------------------------------------------------
+Discussion Question 2 (5 Points): Record the results for ./run_bmarks.sh withcache. 
+What IPC do you see for each benchmark?
+-------------------------------------------------------------------------------
+buffer /daten-mit/6.175/lab-7/bluesim/bin/ubuntu.exe
+Benchmark median
+Cycles = 13703
+Insts  = 8035
+Return 0
+PASSED
+xsim_disconnect:75 pint=0x7f5664000c90 calling $finish
+
+buffer /daten-mit/6.175/lab-7/bluesim/bin/ubuntu.exe
+Benchmark multiply
+Cycles = 38142
+Insts  = 25508
+Return 0
+PASSED
+xsim_disconnect:75 pint=0x7fd248000c90 calling $finish
+
+buffer /daten-mit/6.175/lab-7/bluesim/bin/ubuntu.exe
+Benchmark qsort
+Cycles = 338483
+Insts  = 190854
+Return 0
+PASSED
+xsim_disconnect:75 pint=0x7f09f4000c90 calling $finish
+
+buffer /daten-mit/6.175/lab-7/bluesim/bin/ubuntu.exe
+Benchmark tower
+Cycles = 13030
+Insts  = 4248
+Return 0
+PASSED
+xsim_disconnect:75 pint=0x7f84a8000c90 calling $finish
+
+buffer /daten-mit/6.175/lab-7/bluesim/bin/ubuntu.exe
+Benchmark vvadd
+Cycles = 4349
+Insts  = 2423
+Return 0
+PASSED
+xsim_disconnect:75 pint=0x7fe518000c90 calling $finish
