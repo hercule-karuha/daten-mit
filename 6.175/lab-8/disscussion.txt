@@ -1,0 +1,7 @@
+-------------------------------------------------------------------------------
+Discussion Question 1 (10 Points): In the spirit of the upcoming Thanksgiving holiday, 
+list some reasons you are thankful you only have to do this lab on a one-cycle processor.
+To get you started: what new hazards would exceptions introduce if you were working on a 
+pipelined implementation?
+-------------------------------------------------------------------------------
+the instructions in the pipeline cannot have affect to the processor state when the expection occur.

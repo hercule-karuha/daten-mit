@@ -32,6 +32,7 @@ interface CsrFile;
 endinterface
 
 (* synthesize *)
+(* conflict_free = "wr, eret, startExcep" *)
 module mkCsrFile(CsrFile);
     Reg#(Bool) startReg <- mkConfigReg(False);
 
