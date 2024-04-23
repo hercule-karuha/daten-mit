@@ -58,3 +58,5 @@ interface DCache;
   method ActionValue#(MemResp) resp;
 endinterface
 
+// store queue size
+typedef 16 StQSize;
