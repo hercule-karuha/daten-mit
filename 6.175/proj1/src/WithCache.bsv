@@ -87,7 +87,7 @@ module mkProc#(Fifo#(2,DDR3_Req) ddr3ReqFifo, Fifo#(2,DDR3_Resp) ddr3RespFifo)(P
 
 	ICache iMem <- mkICache(wideMems[0]);
     // DCache dMem <- mkDCache(wideMems[1]);
-	DCache dMem <- mkDCacheStQ(wideMems[1]);
+	DCache dMem <- mkDCacheLHUSM(wideMems[1]);
 
 	rule doInstructionFetch(csrf.started);
 		iMem.req(MemReq{op: Ld, addr: pcReg[0], data: ?});
