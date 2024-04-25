@@ -87,12 +87,15 @@ module mkWideMemFromDDR3(   Fifo#(2, DDR3_Req) ddr3ReqFifo,
         ddr3ReqFifo.enq(ddr3_req);
         $display("mkWideMemFromDDR3::req : wideMemReq.addr = 0x%0x, ddr3Req.address = 0x%0x, ddr3Req.byteen = 0x%0x", x.addr, ddr3_req.address, ddr3_req.byteen);
     endmethod
-        method ActionValue#(WideMemResp) resp;
+
+    method ActionValue#(WideMemResp) resp;
         let x = ddr3RespFifo.first;
         ddr3RespFifo.deq;
         $display("mkWideMemFromDDR3::resp : data = 0x%0x", x.data);
         return unpack(x.data);
     endmethod
+
+    method Bool respValid = ddr3RespFifo.notEmpty;
 endmodule
 
 module mkSplitWideMem(  Bool initDone, WideMem mem,
@@ -143,6 +146,7 @@ module mkSplitWideMem(  Bool initDone, WideMem mem,
                     respFifos[i].deq;
                     return x;
                 endmethod
+                method Bool respValid = respFifos[i].notEmpty;
             endinterface);
     end
     return wideMemIfcs;

@@ -1,7 +1,7 @@
 import Types::*;
 import Ehr::*;
 import Vector::*;
-import MemTypes::*;
+import CMemTypes::*;
 
 typedef MemReq StQEntry;
 
