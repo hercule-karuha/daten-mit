@@ -7,8 +7,8 @@ typedef 16 CacheLineWords; // to match DDR3 width
 // 64 * 8 个byte
 typedef TMul#(CacheLineWords, 4) CacheLineBytes;
 // 总共 8 line
-// typedef 32 CacheRows;
-typedef 8 CacheRows; // small size to improve compile times
+typedef 32 CacheRows;
+// typedef 8 CacheRows; // small size to improve compile times
 typedef 4 CacheGroups; 
 typedef TDiv#(CacheRows,CacheGroups) CacheGroupRows; 
 
@@ -49,7 +49,7 @@ interface Cache;
 endinterface
 
 interface ICache;
-  method Action req(Addr a);
+  method Action req(MemReq r);
   method ActionValue#(MemResp) resp;
 endinterface
 

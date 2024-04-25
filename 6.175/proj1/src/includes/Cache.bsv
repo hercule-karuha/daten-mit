@@ -31,7 +31,6 @@ module mkICache(WideMem wideMem, ICache cache);
 
     Vector#(CacheRows, Reg#(CacheLine)) dataArray <- replicateM(mkRegU);
     Vector#(CacheRows, Reg#(Maybe#(CacheTag))) tagArray <- replicateM(mkReg(Invalid));
-    Vector#(CacheRows, Reg#(Bool)) dirtyArray <- replicateM(mkReg(False));
 
     Fifo#(2, Data) hitQ <- mkCFFifo;
     Reg#(MemReq) missReq <- mkRegU;
@@ -39,18 +38,6 @@ module mkICache(WideMem wideMem, ICache cache);
     function CacheIndex idxOf(Addr addr) = truncate(addr >> 6);
     function CacheTag tagOf(Addr addr) = truncateLSB(addr);
     function CacheWordSelect offsetOf(Addr addr) = truncate(addr >> 2);
-
-    rule startMiss(status == StartMiss);
-        let idx = idxOf(missReq.addr);
-        let dirty = dirtyArray[idx];
-        let tag = tagArray[idx];
-        if(isValid(tag) && dirty) begin
-            let addr = {fromMaybe(?, tag), idx, 6'b0};
-            let data = dataArray[idx];
-            wideMem.req(WideMemReq{write_en: '1, addr: addr, data: data});
-        end
-        status <= SendFillReq;
-    endrule
 
     rule sendFillReq (status == SendFillReq);
         WideMemReq wideMemReq = toWideMemReq(missReq);
@@ -66,7 +53,6 @@ module mkICache(WideMem wideMem, ICache cache);
 
         let data <- wideMem.resp;
         tagArray[idx] <= tagged Valid tag;
-        dirtyArray[idx] <= False;
         dataArray[idx] <= data;
         hitQ.enq(data[offset]);
 
@@ -88,7 +74,7 @@ module mkICache(WideMem wideMem, ICache cache);
         end
         else begin
             missReq <= r;
-            status <= StartMiss;
+            status <= SendFillReq;
         end
     endmethod
 
@@ -98,13 +84,14 @@ module mkICache(WideMem wideMem, ICache cache);
     endmethod
 endmodule
 
-module mkCache(WideMem wideMem, Cache cache);
+module mkDCache(WideMem wideMem, DCache cache);
     Reg#(CacheStatus) status <- mkReg(Ready);
 
     Vector#(CacheRows, Reg#(CacheLine)) dataArray <- replicateM(mkRegU);
     Vector#(CacheRows, Reg#(Maybe#(CacheTag))) tagArray <- replicateM(mkReg(Invalid));
     Vector#(CacheRows, Reg#(Bool)) dirtyArray <- replicateM(mkReg(False));
 
+    Fifo#(1, MemReq) reqQ <- mkBypassFifo;
     Fifo#(2, Data) hitQ <- mkCFFifo;
     Reg#(MemReq) missReq <- mkRegU;
 
@@ -112,40 +99,9 @@ module mkCache(WideMem wideMem, Cache cache);
     function CacheTag tagOf(Addr addr) = truncateLSB(addr);
     function CacheWordSelect offsetOf(Addr addr) = truncate(addr >> 2);
 
-    rule startMiss(status == StartMiss);
-        let idx = idxOf(missReq.addr);
-        let dirty = dirtyArray[idx];
-        let tag = tagArray[idx];
-        if(isValid(tag) && dirty) begin
-            let addr = {fromMaybe(?, tag), idx, 6'b0};
-            let data = dataArray[idx];
-            wideMem.req(WideMemReq{write_en: '1, addr: addr, data: data});
-        end
-        status <= SendFillReq;
-    endrule
-
-    rule sendFillReq (status == SendFillReq);
-        WideMemReq wideMemReq = toWideMemReq(missReq);
-        wideMemReq.write_en = 0;
-        wideMem.req(wideMemReq);
-        status <= WaitFillResp;
-    endrule
-
-    rule waitFillResp (status == WaitFillResp);
-        let idx = idxOf(missReq.addr);
-        let tag = tagOf(missReq.addr);
-        let offset = offsetOf(missReq.addr);
-
-        let data <- wideMem.resp;
-        tagArray[idx] <= tagged Valid tag;
-        dirtyArray[idx] <= False;
-        dataArray[idx] <= data;
-        hitQ.enq(data[offset]);
-
-        status <= Ready;
-    endrule
-
-    method Action req(MemReq r) if (status == Ready);
+    rule doReq(status == Ready);
+        let r = reqQ.first;
+        reqQ.deq;
         let idx = idxOf(r.addr);
         let hit = False;
         let offset = offsetOf(r.addr);
@@ -174,6 +130,43 @@ module mkCache(WideMem wideMem, Cache cache);
                 wideMem.req(toWideMemReq(r));
             end
         end
+    endrule
+
+    rule startMiss(status == StartMiss);
+        let idx = idxOf(missReq.addr);
+        let dirty = dirtyArray[idx];
+        let tag = tagArray[idx];
+        if(isValid(tag) && dirty) begin
+            let addr = {fromMaybe(?, tag), idx, 6'b0};
+            let data = dataArray[idx];
+            wideMem.req(WideMemReq{write_en: '1, addr: addr, data: data});
+        end
+        status <= SendFillReq;
+    endrule
+
+    rule sendFillReq (status == SendFillReq);
+        WideMemReq wideMemReq = toWideMemReq(missReq);
+        wideMemReq.write_en = 0;
+        wideMem.req(wideMemReq);
+        status <= WaitFillResp;
+    endrule
+
+    rule waitFillResp (status == WaitFillResp);
+        let idx = idxOf(missReq.addr);
+        let tag = tagOf(missReq.addr);
+        let offset = offsetOf(missReq.addr);
+
+        let data <- wideMem.resp;
+        tagArray[idx] <= tagged Valid tag;
+        dirtyArray[idx] <= False;
+        dataArray[idx] <= data;
+        hitQ.enq(data[offset]);
+
+        status <= Ready;
+    endrule
+
+    method Action req(MemReq r) if (status == Ready);
+        reqQ.enq(r);
     endmethod
 
     method ActionValue#(MemResp) resp;
