@@ -51,9 +51,10 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
 
     rule startMiss(status == StartMiss);
         let idx = getIndex(missReq.addr);
+        let offset = getWordSelect(missReq.addr);
         if(stateArray[idx] != I) begin
             let d = stateArray[idx] == M ? tagged Valid dataArray[idx]: Invalid; 
-            toMem.enq_resp(CacheMemResp{child: id, addr: zeroExtend(getLineAddr(missReq.addr)), state: I, data: d});
+            toMem.enq_resp(CacheMemResp{child: id, addr: {tagArray[idx], idx, offset, 0}, state: I, data: d});
             stateArray[idx] <= I;
         end
         status <= SendFillReq;
@@ -61,27 +62,20 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
 
     rule sendFillReq (status == SendFillReq);
         let upg = (missReq.op == Ld)? S : M;
-        toMem.enq_req(CacheMemReq{child: id, addr: zeroExtend(getLineAddr(missReq.addr)), state: upg}); 
+        toMem.enq_req(CacheMemReq{child: id, addr: {getLineAddr(missReq.addr), 0}, state: upg}); 
         status <= WaitFillResp;
     endrule
 
-    rule waitFillResp (status == WaitFillResp);
+    rule waitFillResp (status == WaitFillResp && fromMem.hasResp);
         let resp = fromMem.first matches tagged Resp .x ? x : ?;
         let idx = getIndex(missReq.addr);
         let tag = getTag(missReq.addr);
 
-        CacheLine data = ?;
+        CacheLine data = isValid(resp.data) ? fromMaybe(?, resp.data) : dataArray[idx];
 
-        if (isValid(resp.data)) begin 
-            data = fromMaybe(?, resp.data);
-        end 
-        else begin
-            if(missReq.op == St) begin
-                let offset = getWordSelect(missReq.addr);
-                let line = dataArray[idx];
-                line[offset] = missReq.data;
-                data = line;
-            end
+        if(missReq.op == St) begin
+            let offset = getWordSelect(missReq.addr);
+            data[offset] = missReq.data;
         end
 
         dataArray[idx] <= data;
@@ -101,8 +95,9 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
         status <= Ready; 
     endrule
 
-    rule dng(status != Resp);
+    rule dng(status != Resp && fromMem.hasReq);
         let req = fromMem.first matches tagged Req .x ? x : ?;
+        $display("dwongrade req come");
         let offset = getWordSelect(req.addr);
         let idx = getIndex(req.addr);
         let tag = getTag(req.addr);
