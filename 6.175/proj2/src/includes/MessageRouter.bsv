@@ -10,27 +10,22 @@ module mkMessageRouter(
   MessageGet m2r, MessagePut r2m,
   Empty ifc 
 );
-    Bool has_core_resp = False;
-    for(Integer i = 0; i < valueOf(CoreNum); i = i + 1) begin
-        if(c2r[i].hasResp) begin
-            has_core_resp = True;
-        end
-    end
+    function Bool hasRespf(MessageGet g) = g.hasResp;
+    function Bool hasReqf(MessageGet g) = g.hasReq;
+    function Bool check(Bool b) = b;
+    Vector#(CoreNum, Bool) hasRespVec = map(hasRespf, c2r);
+    Bool has_core_resp = any(check, hasRespVec);
 
-    Bool has_core_req = False;
-    for(Integer i = 0; i < valueOf(CoreNum); i = i + 1) begin
-        if(c2r[i].hasReq) begin
-            has_core_req = True;
-        end
-    end
+    Vector#(CoreNum, Bool) hasReqVec = map(hasReqf, c2r);
+    Bool has_core_req = any(check, hasReqVec);
 
     rule c2m(has_core_resp || has_core_req);
         CacheMemMessage m = tagged Req CacheMemReq{child: 0, addr: 0, state : M};
-        Integer index = 0;
+        CoreID index = 0;
         if(has_core_resp) begin
             for(Integer i = 0; i < valueOf(CoreNum); i = i + 1) begin
                 if(c2r[i].hasResp) begin
-                    index = i;
+                    index = fromInteger(i);
                     m = c2r[i].first;
                 end
             end
@@ -42,7 +37,7 @@ module mkMessageRouter(
         else if(has_core_req) begin
             for(Integer i = 0; i < valueOf(CoreNum); i = i + 1) begin
                 if(c2r[i].hasReq) begin
-                    index = i;
+                    index = fromInteger(i);
                     m = c2r[i].first;
                 end
             end

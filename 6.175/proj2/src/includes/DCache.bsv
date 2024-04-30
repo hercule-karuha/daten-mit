@@ -102,7 +102,7 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
 
     rule dng(status != Resp && fromMem.hasReq);
         let req = fromMem.first matches tagged Req .x ? x : ?;
-        $display("  core: %d dwongrade req come",id);
+        $display("core: %d downgrade req come",id);
         let offset = getWordSelect(req.addr);
         let idx = getIndex(req.addr);
         let tag = getTag(req.addr);
