@@ -31,11 +31,13 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
             let cacheLine = dataArray[idx];
             if(r.op == Ld) begin
                 hitQ.enq(cacheLine[offset]);
+                refDMem.commit(r, tagged Valid(cacheLine), tagged Valid(cacheLine[offset]));
             end
             else if(r.op == St) begin
                 if(stateArray[idx] == M) begin
                     cacheLine[offset] = r.data;
                     dataArray[idx] <= cacheLine;
+                    refDMem.commit(r, Valid(dataArray[idx]), Invalid);
                 end
                 else begin 
                     missReq <= r; 
@@ -74,8 +76,10 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
         CacheLine data = isValid(resp.data) ? fromMaybe(?, resp.data) : dataArray[idx];
 
         if(missReq.op == St) begin
+            CacheLine ori_data = isValid(resp.data) ? fromMaybe(?, resp.data) : dataArray[idx];
             let offset = getWordSelect(missReq.addr);
             data[offset] = missReq.data;
+            refDMem.commit(missReq, tagged Valid ori_data, Invalid);
         end
 
         dataArray[idx] <= data;
@@ -91,13 +95,14 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
             let cacheLine = dataArray[idx];
             let offset = getWordSelect(missReq.addr);
             hitQ.enq(cacheLine[offset]); 
+            refDMem.commit(missReq, tagged Valid cacheLine, tagged Valid cacheLine[offset]);
         end
         status <= Ready; 
     endrule
 
     rule dng(status != Resp && fromMem.hasReq);
         let req = fromMem.first matches tagged Req .x ? x : ?;
-        $display("dwongrade req come");
+        $display("  core: %d dwongrade req come",id);
         let offset = getWordSelect(req.addr);
         let idx = getIndex(req.addr);
         let tag = getTag(req.addr);
@@ -119,6 +124,7 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
 
 
     method Action req(MemReq r) if (status == Ready);
+        refDMem.issue(r);
         reqQ.enq(r);
     endmethod
 

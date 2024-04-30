@@ -32,7 +32,7 @@ module mkPPP(MessageGet c2m, MessagePut m2c, WideMem mem, Empty ifc);
         end
 
         if(compatible && !waitc[req.child][idx]) begin
-            if(childState[req.child][req.child] != I) begin
+            if(childState[req.child][idx] != I) begin
                 m2c.enq_resp(CacheMemResp {
                     child: c,
                     addr:req.addr,
@@ -43,6 +43,7 @@ module mkPPP(MessageGet c2m, MessagePut m2c, WideMem mem, Empty ifc);
                 childState[c][idx] <= req.state;
                 childTag[c][idx] <= tag;
                 c2m.deq;
+                readyReg <= False;
             end
             else begin
                 mem.req(WideMemReq{
