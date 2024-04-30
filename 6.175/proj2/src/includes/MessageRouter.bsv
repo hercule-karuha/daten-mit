@@ -1,67 +1,71 @@
-import CacheTypes::*;
 import Vector::*;
-import MemTypes::*;
+import CacheTypes::*;
+import MessageFifo::*;
 import Types::*;
 
 
-
 module mkMessageRouter(
-  Vector#(CoreNum, MessageGet) c2r, Vector#(CoreNum, MessagePut) r2c, 
-  MessageGet m2r, MessagePut r2m,
-  Empty ifc 
-);
-    function Bool hasRespf(MessageGet g) = g.hasResp;
-    function Bool hasReqf(MessageGet g) = g.hasReq;
-    function Bool check(Bool b) = b;
-    Vector#(CoreNum, Bool) hasRespVec = map(hasRespf, c2r);
-    Bool has_core_resp = any(check, hasRespVec);
+        Vector#(CoreNum, MessageGet) c2r,
+        Vector#(CoreNum, MessagePut) r2c,
+        MessageGet m2r,
+        MessagePut r2m,
+        Empty ifc
+        );
 
-    Vector#(CoreNum, Bool) hasReqVec = map(hasReqf, c2r);
-    Bool has_core_req = any(check, hasReqVec);
+    Reg#(CoreID) start_core <- mkReg(0);
+    CoreID max_core = fromInteger(valueOf(CoreNum) - 1);
 
-    rule c2m(has_core_resp || has_core_req);
-        CacheMemMessage m = tagged Req CacheMemReq{child: 0, addr: 0, state : M};
-        CoreID index = 0;
-        if(has_core_resp) begin
-            for(Integer i = 0; i < valueOf(CoreNum); i = i + 1) begin
-                if(c2r[i].hasResp) begin
-                    index = fromInteger(i);
-                    m = c2r[i].first;
+    rule core2mem;
+
+        CoreID core_select = 0;
+        Bool found_msg = False;
+        Bool found_resp = False;
+        for (Integer i=0; i<valueOf(CoreNum); i=i+1) begin
+
+            CoreID core_iter;
+            if (start_core <= max_core - fromInteger(i))
+                core_iter = start_core + fromInteger(i);
+            else
+                core_iter = start_core - fromInteger(valueOf(CoreNum) - i);
+
+
+            if (c2r[core_iter].notEmpty) begin
+                CacheMemMessage x = c2r[core_iter].first;
+                if (x matches tagged Resp .r &&& !found_resp) begin
+                    core_select = core_iter;
+                    found_resp = True;
+                    found_msg = True;
+                end
+                else if (!found_msg) begin
+                    core_select = core_iter;
+                    found_msg = True;
                 end
             end
-            c2r[index].deq;
-            if(m matches tagged Resp .resp) begin
-                r2m.enq_resp(resp);
-            end
         end
-        else if(has_core_req) begin
-            for(Integer i = 0; i < valueOf(CoreNum); i = i + 1) begin
-                if(c2r[i].hasReq) begin
-                    index = fromInteger(i);
-                    m = c2r[i].first;
-                end
-            end
-            c2r[index].deq;
-            if(m matches tagged Req .req) begin
-                r2m.enq_req(req);
-            end
+
+        if (found_msg) begin
+            CacheMemMessage x = c2r[core_select].first;
+            case (x) matches
+                tagged Resp .resp : r2m.enq_resp(resp);
+                tagged Req .req : r2m.enq_req(req);
+            endcase
+            c2r[core_select].deq;
         end
+
+        if (start_core == max_core) start_core <= 0;
+        else start_core <= start_core + 1;
     endrule
 
-    rule m2c(m2r.notEmpty);
-        if(m2r.hasResp) begin
-            let m = m2r.first;
-            m2r.deq;
-            if(m matches tagged Resp .resp) begin
-                r2c[resp.child].enq_resp(resp);
-            end
-        end
-        else if(m2r.hasReq) begin
-            let m = m2r.first;
-            m2r.deq;
-            if(m matches tagged Req .req) begin
-                r2c[req.child].enq_req(req);
-            end
-        end
+    rule mem2core;
+
+        let x = m2r.first;
+        m2r.deq;
+
+        case (x) matches
+            tagged Resp .resp : r2c[resp.child].enq_resp(resp);
+            tagged Req .req : r2c[req.child].enq_req(req);
+        endcase
+
     endrule
+
 endmodule
