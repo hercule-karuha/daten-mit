@@ -14,13 +14,12 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
     Vector#(CacheRows, Reg#(CacheTag)) tagArray <- replicateM(mkRegU);
     Vector#(CacheRows, Reg#(MSI)) stateArray <- replicateM(mkReg(I));
 
-    Reg#(Maybe#(CacheLineAddr)) linkAddr <- mkReg(Invalid);
-
     Reg#(CacheStatus) status <- mkReg(Ready);
 
-    Fifo#(1, MemReq) reqQ <- mkBypassFifo;
-    Fifo#(2, Data) hitQ <- mkCFFifo;
+    Fifo#(8, MemReq) reqQ <- mkBypassFifo;
+    Fifo#(8, Data) hitQ <- mkCFFifo;
     Reg#(MemReq) missReq <- mkRegU;
+    Reg#(Maybe#(CacheLineAddr)) linkAddr <- mkReg(Invalid);
 
     rule doReq(status == Ready);
         let r = reqQ.first;
@@ -55,7 +54,9 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
                             refDMem.commit(r, Valid(dataArray[idx]), Valid(scSucc));
                             linkAddr <= Invalid;
                         end
-                        refDMem.commit(r, Valid(dataArray[idx]), Invalid);
+                        else begin
+                            refDMem.commit(r, Valid(dataArray[idx]), Invalid);
+                        end
                     end
                     else begin 
                         missReq <= r; 
