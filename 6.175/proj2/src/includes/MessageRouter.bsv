@@ -16,7 +16,6 @@ module mkMessageRouter(
     CoreID max_core = fromInteger(valueOf(CoreNum) - 1);
 
     rule core2mem;
-
         CoreID core_select = 0;
         Bool found_msg = False;
         Bool found_resp = False;
@@ -27,7 +26,6 @@ module mkMessageRouter(
                 core_iter = start_core + fromInteger(i);
             else
                 core_iter = start_core - fromInteger(valueOf(CoreNum) - i);
-
 
             if (c2r[core_iter].notEmpty) begin
                 CacheMemMessage x = c2r[core_iter].first;
