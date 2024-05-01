@@ -100,7 +100,7 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
         status <= Ready; 
     endrule
 
-    rule dng(status != Resp && fromMem.hasReq);
+    rule dng(status != Resp && fromMem.hasReq && !fromMem.hasResp);
         let req = fromMem.first matches tagged Req .x ? x : ?;
         $display("core: %d downgrade req come",id);
         let offset = getWordSelect(req.addr);
