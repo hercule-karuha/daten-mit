@@ -35,6 +35,7 @@ module mkProc#(Fifo#(2, DDR3_Req) ddr3ReqFifo, Fifo#(2, DDR3_Resp) ddr3RespFifo)
 	/////////////////////////////////
 
     //RefMem refMem <- mkRefTSOMem;
+    //RefMem refMem <- mkRefTSOMem;
     //RefMem refMem <- mkRefSCMem;
 	RefMem refMem <- mkRefDummyMem;
 
