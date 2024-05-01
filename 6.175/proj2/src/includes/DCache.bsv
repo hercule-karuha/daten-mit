@@ -138,7 +138,6 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
 
     rule dng(status != Resp && fromMem.hasReq && !fromMem.hasResp);
         let req = fromMem.first matches tagged Req .x ? x : ?;
-        $display("core: %d downgrade req come",id);
         let offset = getWordSelect(req.addr);
         let idx = getIndex(req.addr);
         let tag = getTag(req.addr);
@@ -153,7 +152,8 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
            toMem.enq_resp( CacheMemResp {child: id, addr: addr, state: req.state, data: data});
 
            stateArray[idx] <= req.state;
-           if(req.state == I) begin
+           if(isValid(linkAddr) && fromMaybe(?, linkAddr) == getLineAddr(req.addr) 
+            && req.state == I) begin
                 linkAddr <= Invalid;
            end 
         end

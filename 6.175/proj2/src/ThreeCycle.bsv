@@ -123,6 +123,7 @@ module mkCore#(CoreID id)(
 
 	rule doCommit(csrf.started && stage == Commit);
 		ExecInst eInst = eInstReg;
+		let willPrint = fromMaybe(?, eInst.csr) != csrMtohost || (fromMaybe(?, eInst.csr) == csrMtohost && id == 0);
 		// get mem resp for Ld/Lr/Sc
 		if(eInst.iType == Ld || eInst.iType == Lr || eInst.iType == Sc) begin
 			eInst.data <- dCache.resp;
@@ -131,7 +132,7 @@ module mkCore#(CoreID id)(
 		if(isValid(eInst.dst)) begin
 			rf.wr(fromMaybe(?, eInst.dst), eInst.data);
 		end
-		csrf.wr(eInst.iType == Csrw ? eInst.csr : Invalid, eInst.data);
+		csrf.wr(eInst.iType == Csrw && willPrint ? eInst.csr : Invalid, eInst.data);
 		$display("%0t: core %d: Commit, eInst.data = %h", $time, id, eInst.data);
 		// change PC
 		pc <= eInst.brTaken ? eInst.addr : pc+4;
