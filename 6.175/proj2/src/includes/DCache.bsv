@@ -46,7 +46,7 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
                         linkAddr <= tagged Valid getLineAddr(r.addr);
                     end
                 end
-                else if(r.op == St) begin
+                else begin
                     if(stateArray[idx] == M) begin
                         cacheLine[offset] = r.data;
                         dataArray[idx] <= cacheLine;
@@ -85,7 +85,7 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
     endrule
 
     rule sendFillReq (status == SendFillReq);
-        let upg = (missReq.op == Ld)? S : M;
+        let upg = (missReq.op == Ld || missReq.op == Lr)? S : M;
         toMem.enq_req(CacheMemReq{child: id, addr: {getLineAddr(missReq.addr), 0}, state: upg}); 
         status <= WaitFillResp;
     endrule
