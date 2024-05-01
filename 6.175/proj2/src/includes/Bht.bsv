@@ -1,64 +1,53 @@
-import Vector::*;
 import Types::*;
 import ProcTypes::*;
+import RegFile::*;
+import Vector::*;
 
+
+// Counter functions
+function Bit#(2) updateCounter(Bool dir, Bit#(2) counter);
+  return dir?saturatingInc(counter)
+            :saturatingDec(counter);
+endfunction
+
+function Bit#(2) saturatingInc(Bit#(2) counter);
+  let plusOne = counter + 1;
+  return (plusOne == 0)?counter:plusOne;
+endfunction
+
+function Bit#(2) saturatingDec(Bit#(2) counter);
+  return (counter == 0)?0:counter-1;
+endfunction
+
+// indexSize is the number of bits in the index
 interface Bht#(numeric type indexSize);
- method Addr ppcDP(Addr pc, DecodedInst dInst);
- method Action update(Addr pc, Bool taken);
+    method Bool predict(Addr addr);
+    method Action train(Addr addr, Bool taken);
 endinterface
 
-module mkBHT(Bht#(indexSize)) provisos(Add#(indexSize,a__,32));
-    Vector#(TExp#(indexSize), Reg#(Bit#(2))) bhtArr <- replicateM(mkReg(2'b01));
 
-    function Bit#(indexSize) getBhtIndex(Addr pc) = truncate(pc >> 2);
-    function Addr computeTarget(Addr pc, Addr targetPC, Bool taken) = taken ? targetPC : pc + 4;
-    function Bool extractDir(Bit#(2) bhtEntry);
-        case (bhtEntry) matches
-            2'b00 : return False;
-            2'b01 : return False;
-            2'b10 : return True;
-            2'b11 : return True;
-        endcase
-    endfunction
-
-    function Bit#(2) newDpBits(Bit#(2) dpBits, Bool taken);
-        if(taken) begin
-            case (dpBits) matches
-              2'b00 : return 2'b01;
-              2'b01 : return 2'b10;
-              2'b10 : return 2'b11;
-              2'b11 : return 2'b11;
-            endcase
-        end
-        else begin
-            case (dpBits) matches
-               2'b00 : return 2'b00;
-               2'b01 : return 2'b00;
-               2'b10 : return 2'b01;
-               2'b11 : return 2'b10;
-             endcase
-        end
-    endfunction
-
-    method Addr ppcDP(Addr pc, DecodedInst dInst);
-        if(dInst.iType == Br) begin
-            let targetPC = pc + fromMaybe(?, dInst.imm);
-            Bit#(indexSize) index = getBhtIndex(pc);
-            let direction = extractDir(bhtArr[index]);
-            return computeTarget(pc, targetPC, direction); 
-        end
-        else if(dInst.iType == J) begin
-            let targetPC = pc + fromMaybe(?, dInst.imm);
-            return targetPC; 
-        end
-        else begin
-            return pc + 4;
-        end
-    endmethod
+module mkBht( Bht#(indexSize) ) provisos( Add#(indexSize,a__,32) );
     
-    method Action update(Addr pc, Bool taken);
-        Bit#(indexSize) index = getBhtIndex(pc);
-        let dpBits = bhtArr[index];
-        bhtArr[index] <= newDpBits(dpBits, taken); 
+    // Direction predictor state
+    //RegFile#(Bit#(indexSize),Bit#(2)) cntArray <- mkRegFileFull();
+    Vector#(TExp#(indexSize), Reg#(Bit#(2))) counterArray <- replicateM(mkReg(1));
+
+    method Bool predict(Addr addr);
+        
+        Bit#(indexSize) index = truncate(addr >> 2);
+        Bit#(2) counter = counterArray[index];
+        Bit#(1) first = truncate(counter >> 1);
+    
+        Bool taken = (first == 1);
+
+        return taken;
+    endmethod
+
+    method Action train(Addr addr, Bool taken);
+       
+        Bit#(indexSize) index = truncate(addr >> 2);
+        Bit#(2) counter = counterArray[index];
+        
+        counterArray[index] <= updateCounter(taken, counter);
     endmethod
 endmodule
