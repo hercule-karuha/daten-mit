@@ -6,13 +6,15 @@ import Fifo::*;
 import Vector::*;
 import MemUtil::*;
 import RefTypes::*;
+import ProcTypes::*;
 
 typedef enum{Ready, StartMiss, SendFillReq, WaitFillResp, Resp} CacheStatus deriving(Eq, Bits);
 module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMem, DCache ifc);
     Vector#(CacheRows, Reg#(CacheLine)) dataArray <- replicateM(mkRegU);
     Vector#(CacheRows, Reg#(CacheTag)) tagArray <- replicateM(mkRegU);
-    Vector#(CacheRows, Reg#(Bool)) dirtyArray <- replicateM(mkReg(False));
     Vector#(CacheRows, Reg#(MSI)) stateArray <- replicateM(mkReg(I));
+
+    Reg#(Maybe#(CacheLineAddr)) linkAddr <- mkReg(Invalid);
 
     Reg#(CacheStatus) status <- mkReg(Ready);
 
@@ -26,28 +28,45 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
         let idx = getIndex(r.addr);
         let offset = getWordSelect(r.addr);
         let hit = tagArray[idx] == getTag(r.addr) && stateArray[idx] > I;
+        let proceed = (r.op != Sc || (r.op == Sc && isValid(linkAddr) &&
+        fromMaybe(?, linkAddr) == getLineAddr(r.addr)));
 
-        if(hit) begin
-            let cacheLine = dataArray[idx];
-            if(r.op == Ld) begin
-                hitQ.enq(cacheLine[offset]);
-                refDMem.commit(r, tagged Valid(cacheLine), tagged Valid(cacheLine[offset]));
-            end
-            else if(r.op == St) begin
-                if(stateArray[idx] == M) begin
-                    cacheLine[offset] = r.data;
-                    dataArray[idx] <= cacheLine;
-                    refDMem.commit(r, Valid(dataArray[idx]), Invalid);
-                end
-                else begin 
-                    missReq <= r; 
-                    status <= SendFillReq;
-                end
-            end
+        if (!proceed) begin
+            hitQ.enq(scFail);
+            refDMem.commit(r, Invalid, Valid(scFail));
+            linkAddr <= Invalid;
         end
         else begin
-            missReq <= r;
-            status <= StartMiss;
+            if(hit) begin
+                let cacheLine = dataArray[idx];
+                if(r.op == Ld || r.op == Lr) begin
+                    hitQ.enq(cacheLine[offset]);
+                    refDMem.commit(r, tagged Valid(cacheLine), tagged Valid(cacheLine[offset]));
+                    if (r.op == Lr) begin
+                        linkAddr <= tagged Valid getLineAddr(r.addr);
+                    end
+                end
+                else if(r.op == St) begin
+                    if(stateArray[idx] == M) begin
+                        cacheLine[offset] = r.data;
+                        dataArray[idx] <= cacheLine;
+                        if (r.op == Sc) begin
+                            hitQ.enq(scSucc);
+                            refDMem.commit(r, Valid(dataArray[idx]), Valid(scSucc));
+                            linkAddr <= Invalid;
+                        end
+                        refDMem.commit(r, Valid(dataArray[idx]), Invalid);
+                    end
+                    else begin 
+                        missReq <= r; 
+                        status <= SendFillReq;
+                    end
+                end
+            end
+            else begin
+                missReq <= r;
+                status <= StartMiss;
+            end
         end
     endrule
 
@@ -57,6 +76,9 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
         if(stateArray[idx] != I) begin
             let d = stateArray[idx] == M ? tagged Valid dataArray[idx]: Invalid; 
             toMem.enq_resp(CacheMemResp{child: id, addr: {tagArray[idx], idx, offset, 0}, state: I, data: d});
+            if (isValid(linkAddr) && fromMaybe(?, linkAddr) == getLineAddr(missReq.addr)) begin
+                linkAddr <= Invalid;
+            end 
             stateArray[idx] <= I;
         end
         status <= SendFillReq;
@@ -72,14 +94,25 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
         let resp = fromMem.first matches tagged Resp .x ? x : ?;
         let idx = getIndex(missReq.addr);
         let tag = getTag(missReq.addr);
-
+        let offset = getWordSelect(missReq.addr);
+        
         CacheLine data = isValid(resp.data) ? fromMaybe(?, resp.data) : dataArray[idx];
-
+        CacheLine ori_data = isValid(resp.data) ? fromMaybe(?, resp.data) : dataArray[idx];
         if(missReq.op == St) begin
-            CacheLine ori_data = isValid(resp.data) ? fromMaybe(?, resp.data) : dataArray[idx];
-            let offset = getWordSelect(missReq.addr);
             data[offset] = missReq.data;
             refDMem.commit(missReq, tagged Valid ori_data, Invalid);
+        end
+        else if (missReq.op == Sc) begin
+            if (isValid(linkAddr) && fromMaybe(?, linkAddr) == getLineAddr(missReq.addr)) begin
+                refDMem.commit(missReq, tagged Valid ori_data, Valid(scSucc));
+                data[offset] = missReq.data;
+                hitQ.enq(scSucc);
+            end
+            else begin
+                hitQ.enq(scFail);
+                refDMem.commit(missReq, Invalid, Valid(scFail));
+            end
+            linkAddr <= Invalid;
         end
 
         dataArray[idx] <= data;
@@ -91,11 +124,14 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
 
     rule sendProc(status == Resp);
         let idx = getIndex(missReq.addr);
-        if(missReq.op == Ld) begin
+        if(missReq.op == Ld || missReq.op == Lr) begin
             let cacheLine = dataArray[idx];
             let offset = getWordSelect(missReq.addr);
             hitQ.enq(cacheLine[offset]); 
             refDMem.commit(missReq, tagged Valid cacheLine, tagged Valid cacheLine[offset]);
+            if (missReq.op == Lr) begin
+                linkAddr <= tagged Valid getLineAddr(missReq.addr);
+            end
         end
         status <= Ready; 
     endrule
@@ -117,8 +153,10 @@ module mkDCache#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMe
            toMem.enq_resp( CacheMemResp {child: id, addr: addr, state: req.state, data: data});
 
            stateArray[idx] <= req.state;
+           if(req.state == I) begin
+                linkAddr <= Invalid;
+           end 
         end
-
         fromMem.deq;
     endrule
 

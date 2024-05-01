@@ -2,13 +2,13 @@
 
 
 bmarks_tests=(
-	mc_print
-	mc_hello
-	mc_produce_consume
-	mc_median
-	mc_vvadd
-	mc_multiply
-	mc_dekker
+#	mc_print
+#	mc_hello
+#	mc_produce_consume
+#	mc_median
+#	mc_vvadd
+#	mc_multiply
+#	mc_dekker
 	mc_incrementers
 	mc_spin_lock
 	mc_multiply2
