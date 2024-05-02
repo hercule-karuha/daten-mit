@@ -10,92 +10,113 @@ import RefTypes::*;
 import StQ::*;
 
 
-typedef enum{Ready, StartMiss, SendFillReq, WaitFillResp, Resp} CacheStatus
-    deriving(Eq, Bits);
-module mkDCacheStQ#(CoreID id)(
-        MessageGet fromMem,
-        MessagePut toMem,
-        RefDMem refDMem,
-        DCache ifc);
+typedef enum{Ready, StartMiss, SendFillReq, WaitFillResp, Resp} CacheStatus deriving(Eq, Bits);
+module mkDCacheStQ#(CoreID id)(MessageGet fromMem, MessagePut toMem, RefDMem refDMem, DCache ifc);
+    Vector#(CacheRows, Reg#(CacheLine)) dataArray <- replicateM(mkRegU);
+    Vector#(CacheRows, Reg#(CacheTag)) tagArray <- replicateM(mkRegU);
+    Vector#(CacheRows, Reg#(MSI)) stateArray <- replicateM(mkReg(I));
 
     Reg#(CacheStatus) status <- mkReg(Ready);
 
-    Vector#(CacheRows, Reg#(CacheLine)) dataArray <- replicateM(mkRegU);
-    Vector#(CacheRows, Reg#(CacheTag)) tagArray <- replicateM(mkRegU);
-    Vector#(CacheRows, Reg#(MSI)) privArray <- replicateM(mkReg(I));
-
-    Fifo#(2, Data) hitQ <- mkBypassFifo;
-    Fifo#(1, MemReq) reqQ <- mkBypassFifo;
+    Fifo#(8, MemReq) reqQ <- mkBypassFifo;
+    Fifo#(8, Data) hitQ <- mkCFFifo;
     Reg#(MemReq) missReq <- mkRegU;
 
     Reg#(Maybe#(CacheLineAddr)) linkAddr <- mkReg(Invalid);
 
-    StQ#(StQSize) stq <-mkStQ;
+    StQ#(StQSize) stq <- mkStQ;
 
-
-    rule doLoad (status == Ready && (reqQ.first.op == Ld || (reqQ.first.op == Lr
-        && !stq.notEmpty) ) );
-
-        MemReq r = reqQ.first;
+    rule doLd(status == Ready && reqQ.first.op == Ld);
+        let r = reqQ.first;
         reqQ.deq;
-
-        CacheWordSelect sel = getWordSelect(r.addr);
-        CacheIndex idx = getIndex(r.addr);
-        CacheTag tag = getTag(r.addr);
+        let idx = getIndex(r.addr);
+        let offset = getWordSelect(r.addr);
+        let tag = getTag(r.addr);
 
         let x = stq.search(r.addr);
-        let hit = False;
         if (isValid(x)) begin
             hitQ.enq(fromMaybe(?, x));
             refDMem.commit(r, Invalid, x);
-            hit = True;
         end
         else begin
-
-            if (tagArray[idx] == tag && privArray[idx] > I) begin
-
-                hitQ.enq(dataArray[idx][sel]);
+            if (tagArray[idx] == tag && stateArray[idx] > I) begin
+                hitQ.enq(dataArray[idx][offset]);
                 refDMem.commit(r, Valid(dataArray[idx]),
-                                Valid(dataArray[idx][sel]));
-                hit = True;
-
+                                Valid(dataArray[idx][offset]));
             end
             else begin
                 missReq <= r;
                 status <= StartMiss;
             end
         end
-
-        if (hit && r.op == Lr) linkAddr <= tagged Valid getLineAddr(r.addr);
-
     endrule
 
-
-    rule doStore (reqQ.first.op == St);
-
-        MemReq r = reqQ.first;
+    rule doSt(status == Ready && reqQ.first.op == St);
         reqQ.deq;
-        stq.enq(r);
-
+        stq.enq(reqQ.first);
     endrule
 
+    rule mvStqToCache (status == Ready && !reqQ.notEmpty);
+        let r <- stq.issue;
+        let offset = getWordSelect(r.addr);
+        let idx = getIndex(r.addr);
+        let tag = getTag(r.addr);
 
-    rule doSc (status == Ready && reqQ.first.op == Sc && !stq.notEmpty);
+        if (tagArray[idx] == tag && stateArray[idx] > I) begin
+            if (stateArray[idx] == M) begin
+                dataArray[idx][offset] <= r.data;
+                refDMem.commit(r, Valid(dataArray[idx]), Invalid);
+                stq.deq;
+            end
+            else begin
+                missReq <= r;
+                status <= SendFillReq;
+            end
+        end
+        else begin
+            missReq <= r;
+            status <= StartMiss;
+        end
+    endrule
 
-        MemReq r = reqQ.first;
+    rule doLr(status == Ready && reqQ.first.op == Lr && !stq.notEmpty);
+        let r = reqQ.first;
         reqQ.deq;
+        let idx = getIndex(r.addr);
+        let offset = getWordSelect(r.addr);
+        let tag = getTag(r.addr);
 
-        CacheWordSelect sel = getWordSelect(r.addr);
-        CacheIndex idx = getIndex(r.addr);
-        CacheTag tag = getTag(r.addr);
+        let x = stq.search(r.addr);
+        if (isValid(x)) begin
+            hitQ.enq(fromMaybe(?, x));
+            refDMem.commit(r, Invalid, x);
+            linkAddr <= tagged Valid getLineAddr(r.addr);
+        end
+        else begin
+            if (tagArray[idx] == tag && stateArray[idx] > I) begin
+                hitQ.enq(dataArray[idx][offset]);
+                refDMem.commit(r, Valid(dataArray[idx]),
+                                Valid(dataArray[idx][offset]));
+                linkAddr <= tagged Valid getLineAddr(r.addr);
+            end
+            else begin
+                missReq <= r;
+                status <= StartMiss;
+            end
+        end
+    endrule
 
+    rule doSc(status == Ready && reqQ.first.op == Sc && !stq.notEmpty);
+        let r = reqQ.first;
+        reqQ.deq;
+        let offset = getWordSelect(r.addr);
+        let idx = getIndex(r.addr);
+        let tag = getTag(r.addr);
         if (linkAddr matches tagged Valid .la &&& la == getLineAddr(r.addr)) begin
-
-            if (tagArray[idx] == tag && privArray[idx] > I) begin
-
-                if (privArray[idx] == M) begin
+            if (tagArray[idx] == tag && stateArray[idx] > I) begin
+                if (stateArray[idx] == M) begin
                     hitQ.enq(scSucc);
-                    dataArray[idx][sel] <= r.data;
+                    dataArray[idx][offset] <= r.data;
                     refDMem.commit(r, Valid(dataArray[idx]), Valid(scSucc));
                     linkAddr <= Invalid;
                 end
@@ -114,90 +135,51 @@ module mkDCacheStQ#(CoreID id)(
             refDMem.commit(r, Invalid, Valid(scFail));
             linkAddr <= Invalid;
         end
-
     endrule
 
-
-    rule doFence (status == Ready && reqQ.first.op == Fence && !stq.notEmpty);
+    rule doFence(status == Ready && reqQ.first.op == Fence && !stq.notEmpty);
         reqQ.deq;
         refDMem.commit(reqQ.first, Invalid, Invalid);
     endrule
 
-
-    rule startMiss (status == StartMiss);
-
-        CacheWordSelect sel = getWordSelect(missReq.addr);
-        CacheIndex idx = getIndex(missReq.addr);
-        let tag = tagArray[idx];
-
-        if (privArray[idx] != I) begin
-
-           privArray[idx] <= I;
-
-           Maybe#(CacheLine) line;
-           if (privArray[idx] == M)
-                line = Valid(dataArray[idx]);
-           else
-                line = Invalid;
-
-           let addr = {tag, idx, sel, 2'b0};
-           toMem.enq_resp( CacheMemResp {child: id,
-                                  addr: addr,
-                                  state: I,
-                                  data: line});
+    rule startMiss(status == StartMiss);
+        let idx = getIndex(missReq.addr);
+        let offset = getWordSelect(missReq.addr);
+        if(stateArray[idx] != I) begin
+            let d = stateArray[idx] == M ? tagged Valid dataArray[idx]: Invalid; 
+            toMem.enq_resp(CacheMemResp{child: id, addr: {tagArray[idx], idx, offset, 0}, state: I, data: d});
+            if (isValid(linkAddr) && fromMaybe(?, linkAddr) == getLineAddr(missReq.addr)) begin
+                linkAddr <= Invalid;
+            end 
+            stateArray[idx] <= I;
         end
         status <= SendFillReq;
-        if (isValid(linkAddr) &&
-            fromMaybe(?, linkAddr) == getLineAddr(missReq.addr)) begin
-               linkAddr <= Invalid;
-        end
-
     endrule
-
 
     rule sendFillReq (status == SendFillReq);
-
         let upg = (missReq.op == Ld || missReq.op == Lr)? S : M;
-        toMem.enq_req( CacheMemReq {child: id, addr:missReq.addr, state: upg});
+        toMem.enq_req(CacheMemReq{child: id, addr: {getLineAddr(missReq.addr), 0}, state: upg}); 
         status <= WaitFillResp;
-
     endrule
 
-
     rule waitFillResp (status == WaitFillResp && fromMem.hasResp);
-
-        CacheWordSelect sel = getWordSelect(missReq.addr);
-        CacheIndex idx = getIndex(missReq.addr);
+        let resp = fromMem.first matches tagged Resp .x ? x : ?;
+        let idx = getIndex(missReq.addr);
         let tag = getTag(missReq.addr);
-
-        CacheMemResp x = ?;
-        case (fromMem.first) matches
-            tagged Resp .resp : x = resp;
-        endcase
-
-        CacheLine line;
-        if (isValid(x.data))
-            line = fromMaybe(?, x.data);
-        else
-            line = dataArray[idx];
-
-        Bool check = False;
-        if (missReq.op == St) begin
-            let old_line = isValid(x.data) ? fromMaybe(?, x.data) : dataArray[idx];
-            refDMem.commit(missReq, Valid(old_line), Invalid);
-            line[sel] = missReq.data;
+        let offset = getWordSelect(missReq.addr);
+        
+        CacheLine data = isValid(resp.data) ? fromMaybe(?, resp.data) : dataArray[idx];
+        CacheLine ori_data = isValid(resp.data) ? fromMaybe(?, resp.data) : dataArray[idx];
+        if(missReq.op == St) begin
+            data[offset] = missReq.data;
+            refDMem.commit(missReq, tagged Valid ori_data, Invalid);
             stq.deq;
         end
         else if (missReq.op == Sc) begin
-            if (isValid(linkAddr) &&
-                fromMaybe(?, linkAddr) == getLineAddr(missReq.addr)) begin
-
-                let old_line = dataArray[idx];
-                if (isValid(x.data)) old_line = fromMaybe(?, x.data);
-                refDMem.commit(missReq, Valid(old_line), Valid(scSucc));
-                line[sel] = missReq.data;
+            if (isValid(linkAddr) && fromMaybe(?, linkAddr) == getLineAddr(missReq.addr)) begin
+                refDMem.commit(missReq, tagged Valid ori_data, Valid(scSucc));
+                data[offset] = missReq.data;
                 hitQ.enq(scSucc);
-
             end
             else begin
                 hitQ.enq(scFail);
@@ -206,107 +188,60 @@ module mkDCacheStQ#(CoreID id)(
             linkAddr <= Invalid;
         end
 
-        dataArray[idx] <= line;
+        dataArray[idx] <= data;
+        stateArray[idx] <= resp.state;
         tagArray[idx] <= tag;
-        privArray[idx] <= x.state;
         fromMem.deq;
-        status <= Resp;
-
+        status <= Resp;  
     endrule
 
-
-    rule sendCore (status == Resp);
-
-        CacheIndex idx = getIndex(missReq.addr);
-        CacheWordSelect sel = getWordSelect(missReq.addr);
-
-        if (missReq.op == Ld || missReq.op == Lr) begin
-            hitQ.enq(dataArray[idx][sel]);
-            refDMem.commit(missReq, Valid(dataArray[idx]),
-                            Valid(dataArray[idx][sel]));
-
+    rule sendProc(status == Resp);
+        let idx = getIndex(missReq.addr);
+        if(missReq.op == Ld || missReq.op == Lr) begin
+            let cacheLine = dataArray[idx];
+            let offset = getWordSelect(missReq.addr);
+            hitQ.enq(cacheLine[offset]); 
+            refDMem.commit(missReq, tagged Valid cacheLine, tagged Valid cacheLine[offset]);
             if (missReq.op == Lr) begin
                 linkAddr <= tagged Valid getLineAddr(missReq.addr);
             end
         end
-
-        status <= Ready;
-
+        status <= Ready; 
     endrule
 
+    rule dng(status != Resp && fromMem.hasReq && !fromMem.hasResp);
+        let req = fromMem.first matches tagged Req .x ? x : ?;
+        let offset = getWordSelect(req.addr);
+        let idx = getIndex(req.addr);
+        let tag = getTag(req.addr);
 
-    rule dng (status != Resp);
+        if (stateArray[idx] > req.state) begin
+           Maybe#(CacheLine) data;
+           if (stateArray[idx] == M)
+                data = Valid(dataArray[idx]);
+           else
+                data = Invalid;
+           let addr = {tag, idx, offset, 2'b0};
+           toMem.enq_resp( CacheMemResp {child: id, addr: addr, state: req.state, data: data});
 
-        CacheMemReq x = fromMem.first.Req;
-
-        CacheWordSelect sel = getWordSelect(x.addr);
-        CacheIndex idx = getIndex(x.addr);
-        let tag = getTag(x.addr);
-
-
-        if (privArray[idx] > x.state) begin
-
-           Maybe#(CacheLine) line;
-           if (privArray[idx] == M) line = Valid(dataArray[idx]);
-           else line = Invalid;
-
-           let addr = {tag, idx, sel, 2'b0};
-           toMem.enq_resp( CacheMemResp {child: id,
-                                  addr: addr,
-                                  state: x.state,
-                                  data: line});
-
-            privArray[idx] <= x.state;
-            if (linkAddr matches tagged Valid .la &&& la == getLineAddr(x.addr)
-                && x.state == I) linkAddr <= Invalid;
+           stateArray[idx] <= req.state;
+           if(isValid(linkAddr) && fromMaybe(?, linkAddr) == getLineAddr(req.addr) 
+            && req.state == I) begin
+                linkAddr <= Invalid;
+           end 
         end
         fromMem.deq;
     endrule
 
 
-    rule mvStqToCache (status == Ready && (!reqQ.notEmpty || reqQ.first.op != Ld));
-
-        MemReq r <- stq.issue;
-
-        CacheWordSelect sel = getWordSelect(r.addr);
-        CacheIndex idx = getIndex(r.addr);
-        CacheTag tag = getTag(r.addr);
-
-        if (tagArray[idx] == tag && privArray[idx] > I) begin
-            if (privArray[idx] == M) begin
-
-                dataArray[idx][sel] <= r.data;
-                refDMem.commit(r, Valid(dataArray[idx]), Invalid);
-                stq.deq;
-                if (linkAddr matches tagged Valid .la &&& la == getLineAddr(r.addr))
-                    linkAddr <= Invalid;
-            end
-            else begin
-
-                missReq <= r;
-                status <= SendFillReq;
-            end
-        end
-        else begin
-
-            missReq <= r;
-            status <= StartMiss;
-        end
-    endrule
-
-
-
-    method Action req(MemReq r);
-        reqQ.enq(r);
+    method Action req(MemReq r) if (status == Ready);
         refDMem.issue(r);
+        reqQ.enq(r);
     endmethod
 
-
-    method ActionValue#(Data) resp;
+    method ActionValue#(MemResp) resp;
         hitQ.deq;
         return hitQ.first;
     endmethod
-
-
 endmodule
 

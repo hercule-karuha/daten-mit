@@ -41,9 +41,10 @@ module mkCore#(CoreID id)(
     ICache               iCache <- mkICache(iMem);
     MessageFifo#(8)   toParentQ <- mkMessageFifo;
     MessageFifo#(8) fromParentQ <- mkMessageFifo;
-    DCache               dCache <- mkDCacheStQ(id, toMessageGet(fromParentQ), toMessagePut(toParentQ), refDMem);
+    DCache               dCache <- mkDCacheStQLHUSM(id, toMessageGet(fromParentQ), toMessagePut(toParentQ), refDMem);
 
     rule doFetch if (csrf.started && stage == Fetch);
+        $display("%0t: core %d: Fetch: PC = %h", $time, id, pc);
         iCache.req(pc);
         stage <= Execute;
     endrule
@@ -55,6 +56,7 @@ module mkCore#(CoreID id)(
         let  rVal2 = rf.rd2(validValue(dInst.src2));
         let csrVal = csrf.rd(validValue(dInst.csr));
         let  eInst = exec(dInst, rVal1, rVal2, pc, ?, csrVal);
+        $display("%0t: core %d: Exe: inst (%h) expanded: ", $time, id, inst, showInst(inst));
         if (eInst.iType == Unsupported) begin
             $fwrite(stderr, "ERROR: Executing unsupported instruction. Exiting\n");
             $finish;
@@ -95,6 +97,7 @@ module mkCore#(CoreID id)(
     rule doCommit if (csrf.started && stage == Commit);
         let eInst = e2c;
 		let willPrint = fromMaybe(?, eInst.csr) != csrMtohost || (fromMaybe(?, eInst.csr) == csrMtohost && id == 0);
+        $display("%0t: core %d: Commit, eInst.data = %h", $time, id, eInst.data);
         if (eInst.iType == Ld || eInst.iType == Lr || eInst.iType == Sc) begin
             eInst.data <- dCache.resp;
         end
