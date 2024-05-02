@@ -24,5 +24,5 @@ typedef Bit#(DataSz) Data;
 typedef 32 InstSz;
 typedef Bit#(InstSz) Instruction;
 
-typedef `CORE_NUM CoreNum;
+typedef 2 CoreNum;
 typedef Bit#(TLog#(CoreNum)) CoreID;
